@@ -2,7 +2,7 @@
 /*
  *  MA35D1 serial driver
  *
- *  Copyright (C) 2025 Nuvoton Technology Corp.
+ *  Copyright (C) 2026 Nuvoton Technology Corp.
  *
  */
 
@@ -35,10 +35,11 @@
 #include <linux/io.h>
 #include <asm/irq.h>
 #include <asm/serial.h>
+#include <linux/kfifo.h>
 #include <linux/platform_data/dma-ma35d1.h>
 #include "ma35d1_serial.h"
 
-//#define EN_UART_PDMA_RX
+#define EN_UART_PDMA_RX
 
 #define UART_NR 17
 #define UART_RX_BUF_SIZE 4096
@@ -121,9 +122,6 @@ struct uart_ma35d1_port {
 	void (*pm)(struct uart_port *port, unsigned int state, unsigned int old);
 };
 
-void ma35d1serial_suspend_port(int line);
-void ma35d1serial_resume_port(int line);
-
 static struct uart_ma35d1_port ma35d1serial_ports[UART_NR] = { 0 };
 
 static inline void __stop_tx(struct uart_ma35d1_port *p);
@@ -131,7 +129,7 @@ static inline void __stop_tx(struct uart_ma35d1_port *p);
 #ifdef EN_UART_PDMA_RX
 static void ma35d1_prepare_RX_dma(struct uart_ma35d1_port *p);
 #endif
-//static void ma35d1_prepare_TX_dma(struct uart_ma35d1_port *p);
+static void ma35d1_prepare_TX_dma(struct uart_ma35d1_port *p);
 
 static inline struct uart_ma35d1_port *to_ma35d1_uart_port(struct uart_port *uart)
 {
@@ -235,30 +233,30 @@ static void ma35d1_Rx_dma_callback(void *arg)
 }
 #endif
 
-#if 0  // TO DO...
 static void ma35d1_Tx_dma_callback(void *arg)
 {
 	struct ma35d1_dma_done *done = arg;
 	struct uart_ma35d1_port *p = (struct uart_ma35d1_port *)done->callback_param;
-	struct circ_buf *xmit = &p->port.state->xmit;
+	struct tty_port *tport = &p->port.state->port;
 	unsigned long flags;
 
-	spin_lock_irqsave(&p->port.lock, flags);
+	uart_port_lock_irqsave(&p->port, &flags);
+
 	p->port.icount.tx += p->tx_dma_len;
-	if (uart_circ_chars_pending(xmit) < WAKEUP_CHARS)
+
+	if (kfifo_len(&tport->xmit_fifo) < WAKEUP_CHARS)
 		uart_write_wakeup(&p->port);
 
-	if (!uart_circ_empty(xmit) && !uart_tx_stopped(&p->port)) {
+	if (!kfifo_is_empty(&tport->xmit_fifo) && !uart_tx_stopped(&p->port)) {
 		p->Tx_pdma_busy_flag = 1;
 		ma35d1_prepare_TX_dma(p);
-		/* Trigger Tx dma again */
 		serial_out(p, UART_REG_IER, (serial_in(p, UART_REG_IER) | TXPDMAEN));
-	} else
+	} else {
 		p->Tx_pdma_busy_flag = 0;
+	}
 
-	spin_unlock_irqrestore(&p->port.lock, flags);
+	uart_port_unlock_irqrestore(&p->port, flags);
 }
-#endif
 
 static void set_pdma_flag(struct uart_ma35d1_port *p, int id)
 {
@@ -270,7 +268,7 @@ static void set_pdma_flag(struct uart_ma35d1_port *p, int id)
 }
 
 #ifdef EN_UART_PDMA_RX
-void ma35d1_uart_cal_pdma_time_out(struct uart_ma35d1_port *p, unsigned int baud)
+static void ma35d1_uart_cal_pdma_time_out(struct uart_ma35d1_port *p, unsigned int baud)
 {
 	unsigned int lcr;
 	unsigned int pdma_time_out_base = 180000000 * Time_Out_Frame_Count / 256;
@@ -384,18 +382,16 @@ static void ma35d1_prepare_RX_dma(struct uart_ma35d1_port *p)
 	p->dma_Rx_done.timeout = 0;
 	p->dma_Rx_done.callback_param = p;
 	pdma_rx->rxdesc->callback_param = &(p->dma_Rx_done);
-	dmaengine_submit(pdma_rx->rxdesc);
 	pdma_rx->cookie = dmaengine_submit(pdma_rx->rxdesc);
 	dma_async_issue_pending(pdma_rx->chan_rx);
 }
 #endif
 
-#if 0  // TO DO...
 static void ma35d1_prepare_TX_dma(struct uart_ma35d1_port *p)
 {
 	struct ma35d1_ip_tx_dma *pdma_tx = &(p->dma_tx);
 	struct ma35d1_peripheral pcfg;
-	struct circ_buf *xmit = &p->port.state->xmit;
+	struct tty_port *tport = &p->port.state->port;
 	int ret;
 
 	if (p->src_mem_p.size == 0) {
@@ -408,24 +404,14 @@ static void ma35d1_prepare_TX_dma(struct uart_ma35d1_port *p)
 			dev_err(p->port.dev, "src mapping error.\n");
 	}
 
-	p->tx_dma_len = uart_circ_chars_pending(xmit);
-
-	if (xmit->tail < xmit->head) {
-		memcpy((unsigned char *)p->src_mem_p.vir_addr,
-		       &xmit->buf[xmit->tail], p->tx_dma_len);
-	} else {
-		size_t second = xmit->head;
-		size_t first = UART_XMIT_SIZE - xmit->tail;
-
-		memcpy((unsigned char *)p->src_mem_p.vir_addr, &xmit->buf[xmit->tail], first);
-		if (second)
-			memcpy((unsigned char *)p->src_mem_p.vir_addr + first, &xmit->buf[0], second);
-	}
+	p->tx_dma_len = kfifo_out(&tport->xmit_fifo,
+				   (unsigned char *)p->src_mem_p.vir_addr,
+				   UART_XMIT_SIZE);
+	if (p->tx_dma_len == 0)
+		return;
 
 	dma_sync_single_for_device(pdma_tx->chan_tx->device->dev,
 				   p->src_mem_p.phy_addr, UART_XMIT_SIZE, DMA_TO_DEVICE);
-
-	xmit->tail = (xmit->tail + p->tx_dma_len) & (UART_XMIT_SIZE - 1);
 
 	serial_out(p, UART_REG_IER, (serial_in(p, UART_REG_IER) & ~TXPDMAEN));
 	pdma_tx->slave_config.dst_addr = (unsigned int)(p->port.iobase);
@@ -449,15 +435,15 @@ static void ma35d1_prepare_TX_dma(struct uart_ma35d1_port *p)
 
 	if (!pdma_tx->txdesc) {
 		dev_err(p->port.dev, "pdma->txdes==NULL.\n");
+		kfifo_in(&tport->xmit_fifo, (unsigned char *)p->src_mem_p.vir_addr, p->tx_dma_len);
 		return;
 	}
-	// pdma_tx->txdesc->callback = ma35d1_Tx_dma_callback;
+	pdma_tx->txdesc->callback = ma35d1_Tx_dma_callback;
 	p->dma_Tx_done.callback_param = p;
 	pdma_tx->txdesc->callback_param = &(p->dma_Tx_done);
 	dmaengine_submit(pdma_tx->txdesc);
 	dma_async_issue_pending(pdma_tx->chan_tx);
 }
-#endif
 
 static void rs485_start_rx(struct uart_ma35d1_port *port)
 {
@@ -493,20 +479,32 @@ static void transmit_chars(struct uart_ma35d1_port *up);
 static void ma35d1serial_start_tx(struct uart_port *port)
 {
 	struct uart_ma35d1_port *up = (struct uart_ma35d1_port *)port;
+	struct tty_port *tport = &up->port.state->port;
 	unsigned int ier;
 
 	if (up->rs485.flags & SER_RS485_ENABLED)
 		rs485_stop_rx(up);
 
 	if (up->uart_pdma_enable_flag == 1) {
-		/*
-		 * TODO: PDMA TX path needs kfifo migration.
-		 * Use PIO TX first for Linux 6.12 bring-up.
-		 */
+		if (up->Tx_pdma_busy_flag == 1)
+			return;
+
+		if (kfifo_is_empty(&tport->xmit_fifo)) {
+			__stop_tx(up);
+			return;
+		}
+
+		up->Tx_pdma_busy_flag = 1;
+		ma35d1_prepare_TX_dma(up);
+		serial_out(up, UART_REG_IER, (serial_in(up, UART_REG_IER) | TXPDMAEN));
 	} else {
 		ier = serial_in(up, UART_REG_IER);
 		serial_out(up, UART_REG_IER, ier & ~THRE_IEN);
-		transmit_chars(up);
+
+		if (kfifo_len(&tport->xmit_fifo) >=
+			(16 - ((serial_in(up, UART_REG_FSR) >> 16) & 0x3F)))
+			transmit_chars(up);
+
 		serial_out(up, UART_REG_IER, ier | THRE_IEN);
 	}
 }
@@ -679,19 +677,48 @@ tout_end1:
 
 static void transmit_chars(struct uart_ma35d1_port *up)
 {
-	unsigned int count;
+	struct tty_port *tport = &up->port.state->port;
 	unsigned char ch;
-
-	count = 16 - ((serial_in(up, UART_REG_FSR) >> 16) & 0xF);
+	int count = 16 - ((serial_in(up, UART_REG_FSR) >> 16) & 0xF);
 
 	if (serial_in(up, UART_REG_FSR) & TX_FULL)
 		count = 0;
 
-	uart_port_tx_limited(&up->port, ch, count,
-		!(serial_in(up, UART_REG_FSR) & TX_FULL),
-		serial_out(up, UART_REG_THR, ch),
-		({ })
-	);
+	if (up->port.x_char) {
+		do {
+		} while (serial_in(up, UART_REG_FSR) & TX_FULL);
+		serial_out(up, UART_REG_THR, up->port.x_char);
+		up->port.icount.tx++;
+		up->port.x_char = 0;
+		return;
+	}
+	if (uart_tx_stopped(&up->port)) {
+		ma35d1serial_stop_tx(&up->port);
+		return;
+	}
+	if (kfifo_is_empty(&tport->xmit_fifo)) {
+		__stop_tx(up);
+		return;
+	}
+
+	while (count > 0) {
+		do {
+		} while (serial_in(up, UART_REG_FSR) & TX_FULL);
+
+		if (!uart_fifo_get(&up->port, &ch))
+			break;
+		serial_out(up, UART_REG_THR, ch);
+		count--;
+
+		if (kfifo_is_empty(&tport->xmit_fifo))
+			break;
+	}
+
+	if (kfifo_len(&tport->xmit_fifo) < WAKEUP_CHARS)
+		uart_write_wakeup(&up->port);
+
+	if (kfifo_is_empty(&tport->xmit_fifo))
+		__stop_tx(up);
 }
 
 static unsigned int check_modem_status(struct uart_ma35d1_port *up)
@@ -854,39 +881,31 @@ static int ma35d1serial_startup(struct uart_port *port)
 	struct ma35d1_ip_rx_dma *pdma_rx = &(up->dma_rx);
 #endif
 
-	dma_cap_mask_t mask;
-
-	spin_lock_irqsave(&up->port.lock, flags);
-
 	if (up->uart_pdma_enable_flag == 1) {
-		dma_cap_zero(mask);
-		dma_cap_set(DMA_SLAVE, mask);
-		dma_cap_set(DMA_PRIVATE, mask);
-
 #ifdef EN_UART_PDMA_RX
-		pdma_rx->chan_rx = dma_request_slave_channel(up->port.dev, "rx");
-		if (!pdma_rx->chan_rx) {
-			dev_err(up->port.dev, "RX DMA channel request error.\n");
-			return -1;
+		pdma_rx->chan_rx = dma_request_chan(up->port.dev, "rx");
+		if (IS_ERR(pdma_rx->chan_rx)) {
+			retval = PTR_ERR(pdma_rx->chan_rx);
+			pdma_rx->chan_rx = NULL;
+			if (retval != -EPROBE_DEFER)
+				dev_err(up->port.dev, "RX DMA channel request error (%d).\n", retval);
+			return retval;
 		}
-		pdma_rx->chan_rx->private = (void *)1;
 #endif
-
-		pdma_tx->chan_tx = dma_request_slave_channel(up->port.dev, "tx");
-		if (!pdma_tx->chan_tx) {
-			dev_err(up->port.dev, "TX DMA channel request error.\n");
-			return -1;
+		pdma_tx->chan_tx = dma_request_chan(up->port.dev, "tx");
+		if (IS_ERR(pdma_tx->chan_tx)) {
+			retval = PTR_ERR(pdma_tx->chan_tx);
+			pdma_tx->chan_tx = NULL;
+			if (retval != -EPROBE_DEFER)
+				dev_err(up->port.dev, "TX DMA channel request error (%d).\n", retval);
+#ifdef EN_UART_PDMA_RX
+			dma_release_channel(pdma_rx->chan_rx);
+			pdma_rx->chan_rx = NULL;
+#endif
+			return retval;
 		}
-		pdma_tx->chan_tx->private = (void *)1;
 	}
 
-	/* Reset FIFO */
-	serial_out(up, UART_REG_FCR, TFR | RFR);
-
-	/* Clear pending interrupts */
-	serial_out(up, UART_REG_ISR, 0xFFFFFFFF);
-
-	spin_unlock_irqrestore(&up->port.lock, flags);
 	retval = request_irq(port->irq, ma35d1serial_interrupt, 0,
 			     tty ? tty->name : "ma35d1_serial", port);
 
@@ -894,7 +913,14 @@ static int ma35d1serial_startup(struct uart_port *port)
 		dev_err(up->port.dev, "request irq failed.\n");
 		return retval;
 	}
+
 	spin_lock_irqsave(&up->port.lock, flags);
+
+	/* Reset FIFO */
+	serial_out(up, UART_REG_FCR, TFR | RFR);
+
+	/* Clear pending interrupts */
+	serial_out(up, UART_REG_ISR, 0xFFFFFFFF);
 
 	/* Now, initialize the UART, FIFO trigger level 4 byte, RTS trigger level 8 bytes */
 	serial_out(up, UART_REG_FCR, serial_in(up, UART_REG_FCR) | 0x10 | 0x20000);
@@ -1182,6 +1208,8 @@ static const struct uart_ops ma35d1serial_ops = {
 
 static const struct of_device_id ma35d1_serial_of_match[] = {
 	{.compatible = "nuvoton,ma35d1-uart" },
+	{.compatible = "nuvoton,ma35d0-uart" },
+	{.compatible = "nuvoton,ma35h0-uart" },
 	{ },
 };
 
@@ -1196,14 +1224,22 @@ static void __init ma35d1serial_init_ports(void)
 	u32 val32[4];
 
 	clk_node = of_find_compatible_node(NULL, NULL, "nuvoton,ma35d1-clk");
+	if (!clk_node)
+		clk_node = of_find_compatible_node(NULL, NULL, "nuvoton,ma35d0-clk");
+	if (!clk_node)
+		clk_node = of_find_compatible_node(NULL, NULL, "nuvoton,ma35h0-clk");
 	clk_base = of_iomap(clk_node, 0);
+	if (!clk_base)
+		return;
 
 	__raw_writel(__raw_readl(clk_base + 0xC) | (0x3fff << 12), clk_base + 0xC);
 	__raw_writel(__raw_readl(clk_base + 0x20) & ~(3 << 16), clk_base + 0x20);
 
 	for_each_matching_node(np, ma35d1_serial_of_match) {
 
-		if (!of_find_property(np, "ma35d1-console", NULL))
+		if (!of_find_property(np, "ma35d1-console", NULL) &&
+		    !of_find_property(np, "ma35d0-console", NULL) &&
+		    !of_find_property(np, "ma35h0-console", NULL))
 			continue;
 
 		if (of_property_read_u32_array(np, "reg", val32, 4) != 0)
@@ -1328,22 +1364,20 @@ static struct uart_driver ma35d1serial_reg = {
  *
  *  Suspend one serial port.
  */
-void ma35d1serial_suspend_port(int line)
+static void __maybe_unused ma35d1serial_suspend_port(int line)
 {
 	uart_suspend_port(&ma35d1serial_reg, &ma35d1serial_ports[line].port);
 }
-EXPORT_SYMBOL(ma35d1serial_suspend_port);
 
 /*
  *  Resume one serial port.
  */
-void ma35d1serial_resume_port(int line)
+static void __maybe_unused ma35d1serial_resume_port(int line)
 {
 	struct uart_ma35d1_port *up = &ma35d1serial_ports[line];
 
 	uart_resume_port(&ma35d1serial_reg, &up->port);
 }
-EXPORT_SYMBOL(ma35d1serial_resume_port);
 
 static int get_uart_port_number(struct platform_device *pdev)
 {
@@ -1356,6 +1390,10 @@ static int get_uart_port_number(struct platform_device *pdev)
 
 	return val32[0];
 }
+
+static const struct serial_rs485 ma35d1_rs485_supported = {
+	.flags = SER_RS485_ENABLED | SER_RS485_RTS_ON_SEND | SER_RS485_RTS_AFTER_SEND
+};
 
 /*
  * Register a set of serial devices attached to a platform device.  The
@@ -1446,6 +1484,10 @@ static int ma35d1serial_probe(struct platform_device *pdev)
 	up->port.dev = &pdev->dev;
 	up->port.flags = UPF_BOOT_AUTOCONF;
 	up->port.rs485_config = ma35d1serial_config_rs485;
+	up->port.rs485_supported = ma35d1_rs485_supported;
+	ret = uart_get_rs485_mode(&up->port);
+	if (ret)
+		dev_err(&pdev->dev, "failed\n");
 	ret = uart_add_one_port(&ma35d1serial_reg, &up->port);
 	platform_set_drvdata(pdev, up);
 

@@ -2,7 +2,7 @@
 /*
  * Driver for Nuvoton MA35d1 regulator
  *
- * Copyright (C) 2021 Nuvoton Technology Corp.
+ * Copyright (C) 2026 Nuvoton Technology Corp.
  *
  */
 
@@ -126,6 +126,8 @@ static int ma35d1_regulator_probe(struct platform_device *pdev)
 
 static const struct of_device_id ma35d1_regulator_of_match[] = {
 	{ .compatible = "nuvoton,ma35d1-volt", },
+	{ .compatible = "nuvoton,ma35d0-volt", },
+	{ .compatible = "nuvoton,ma35h0-volt", },
 	{ }
 };
 MODULE_DEVICE_TABLE(of, ma35d1_regulator_of_match);
@@ -140,7 +142,7 @@ static struct platform_driver ma35d1_regulator_driver = {
 
 module_platform_driver(ma35d1_regulator_driver);
 
-MODULE_DESCRIPTION("Nuvootn ma35d1 regulator");
+MODULE_DESCRIPTION("Nuvoton ma35d1 regulator");
 MODULE_LICENSE("GPL v2");
 MODULE_ALIAS("platform:ma35d1-regulator");
 

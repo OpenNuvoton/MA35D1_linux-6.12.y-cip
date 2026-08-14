@@ -286,11 +286,21 @@ static int ma35d1_probe(struct platform_device *pdev)
 
 		priv->regmap = syscon_regmap_lookup_by_phandle(
 				pdev->dev.of_node, "nuvoton,ma35d1-sys");
+		if (IS_ERR(priv->regmap))
+			priv->regmap = syscon_regmap_lookup_by_phandle(
+					pdev->dev.of_node, "nuvoton,ma35d0-sys");
+		if (IS_ERR(priv->regmap))
+			priv->regmap = syscon_regmap_lookup_by_phandle(
+					pdev->dev.of_node, "nuvoton,ma35h0-sys");
 
-		/* Set SDH1 voltage stable for 1.8V  */
-		regmap_read(priv->regmap, REG_SYS_MISCFCR0, &reg);
-		reg |= SDH1VSTB;
-		regmap_write(priv->regmap, REG_SYS_MISCFCR0, reg);
+		if (IS_ERR(priv->regmap)) {
+			dev_err(&pdev->dev, "Error: Missing sys regmap\n");
+		} else {
+			/* Set SDH1 voltage stable for 1.8V  */
+			regmap_read(priv->regmap, REG_SYS_MISCFCR0, &reg);
+			reg |= SDH1VSTB;
+			regmap_write(priv->regmap, REG_SYS_MISCFCR0, reg);
+		}
 
 		err = ma35d1_sdhci_init_pinctrl(&pdev->dev, priv);
 		if (err == 0) {
@@ -335,6 +345,8 @@ static void ma35d1_remove(struct platform_device *pdev)
 
 static const struct of_device_id sdhci_ma35d1_dt_ids[] = {
 	{ .compatible = "nuvoton,ma35d1-sdhci" },
+	{ .compatible = "nuvoton,ma35d0-sdhci" },
+	{ .compatible = "nuvoton,ma35h0-sdhci" },
 	{}
 };
 MODULE_DEVICE_TABLE(of, sdhci_ma35d1_dt_ids);

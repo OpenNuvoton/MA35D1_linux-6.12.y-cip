@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: GPL-2.0-only
+config MA35D1_THERMAL
+	tristate "MA35D1 Temperature Sensor"
+	depends on ARCH_MA35D1 || ARCH_MA35D0 || ARCH_MA35H0
+	default y
+	help
+	  This enables the thermal sysfs driver for the TSENS device. It shows
+	  up in Sysfs as a thermal zone.

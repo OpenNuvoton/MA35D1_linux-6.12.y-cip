@@ -736,6 +736,20 @@ config CRYPTO_DEV_ZYNQMP_SHA3
 	  Select this if you want to use the ZynqMP module
 	  for SHA3 hash computation.
 
+config CRYPTO_DEV_NUVOTON_MA35D1
+	bool "Nuvoton's MA35D1 Series Cryptographic Accelerator driver"
+	default y
+	depends on ARCH_MA35D1 || ARCH_MA35D0 || ARCH_MA35H0
+	select CRYPTO_AES
+	select CRYPTO_AEAD
+	select CRYPTO_BLKCIPHER
+	select CRYPTO_SHA256
+	select CRYPTO_ECDH
+	select CRYPTO_RSA
+	help
+	  This driver supports Nuvoton cryptographic hardware accelerator. It supports AES
+	  ECB/CBC/CTR/CFB/OFB/GCM/CCM mode, SM4, SHA1/SHA256/SHA512, SM3, and MD5.
+
 source "drivers/crypto/chelsio/Kconfig"
 
 source "drivers/crypto/virtio/Kconfig"

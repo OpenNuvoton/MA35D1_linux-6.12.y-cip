@@ -610,6 +610,48 @@ config MARVELL_CN10K_DPI
 	  To compile this driver as a module, choose M here: the module
 	  will be called mrvl_cn10k_dpi.
 
+config MA35D1_EBI
+	tristate "Nuvoton MA35D1 EBI support"
+	depends on ARCH_MA35D1 || ARCH_MA35D0 || ARCH_MA35H0
+	default y
+	help
+	  This driver provides support for Nuvoton MA35D1/MA35D0/MA35H0 EBI.
+
+config MA35D1_TIMER
+	tristate "Nuvoton MA35D1 TIMER support"
+	depends on ARCH_MA35D1 || ARCH_MA35D0 || ARCH_MA35H0
+	default y
+	help
+	  This driver provides support for Nuvoton MA35D1/MA35D0/MA35H0 TIMER.
+
+config MA35D1_KEYSTORE
+	tristate "Nuvoton MA35D1 Series SoC Key Store support"
+	depends on ARCH_MA35D1 || ARCH_MA35D0 || ARCH_MA35H0
+	default y
+	help
+	  This driver provides support for Nuvoton MA35 Series SoC Key Store.
+
+config MA35D1_MISCTRL
+	tristate "Nuvoton MA35D1 MISC control support"
+	depends on ARCH_MA35D1
+	default y
+	help
+	  This driver provides support for Nuvoton MA35D1 MISC control.
+
+config MA35D0_MISCTRL
+	tristate "Nuvoton MA35D0 MISC control support"
+	depends on ARCH_MA35D0
+	default y
+	help
+	  This driver provides support for Nuvoton MA35D0 MISC control.
+
+config MA35H0_MISCTRL
+	tristate "Nuvoton MA35H0 MISC control support"
+	depends on ARCH_MA35H0
+	default y
+	help
+	  This driver provides support for Nuvoton MA35H0 MISC control.
+
 source "drivers/misc/c2port/Kconfig"
 source "drivers/misc/eeprom/Kconfig"
 source "drivers/misc/cb710/Kconfig"

@@ -1707,7 +1707,7 @@ config MFD_TI_LP87565
 
 config MFD_MA35D1
 	bool "MA35D1 SYSCTL Driver"
-	default ARCH_MA35D1 && OF
+	default (ARCH_MA35D1 || ARCH_MA35D0 || ARCH_MA35H0) && OF
 	select MFD_SYSCON
 	help
 	  Select this to get support for MA35D1 SYSCTL driver. This driver

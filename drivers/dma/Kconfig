@@ -733,6 +733,36 @@ config XILINX_ZYNQMP_DPDMA
 	  driver provides the dmaengine required by the DisplayPort subsystem
 	  display driver.
 
+config MA35D1_DMA
+	tristate "MA35D1 DMA support"
+	depends on ARCH_MA35D1
+	default y
+	select DMA_ENGINE
+	select DMA_VIRTUAL_CHANNELS
+	help
+	  Support the MA35D1 DMA engine. This engine is integrated into
+	  NUVOTON MA35D1 chips.
+
+config MA35H0_DMA
+	tristate "MA35H0 DMA support"
+	depends on ARCH_MA35H0
+	default y
+	select DMA_ENGINE
+	select DMA_VIRTUAL_CHANNELS
+	help
+	  Support the MA35H0 DMA engine. This engine is integrated into
+	  NUVOTON MA35H0 chips.
+
+config MA35D0_DMA
+	tristate "MA35D0 DMA support"
+	depends on ARCH_MA35D0
+	default y
+	select DMA_ENGINE
+	select DMA_VIRTUAL_CHANNELS
+	help
+	  Support the MA35D0 DMA engine. This engine is integrated into
+	  NUVOTON MA35D0 chips.
+
 # driver files
 source "drivers/dma/amd/Kconfig"
 

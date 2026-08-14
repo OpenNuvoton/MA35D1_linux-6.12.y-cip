@@ -81,4 +81,32 @@ config RPMSG_VIRTIO
 	select RPMSG_NS
 	select VIRTIO
 
+config MA35D1_AMPM
+	tristate "MA35D1 AMP-M Driver"
+	depends on ARCH_MA35D1
+	default y
+	select RPMSG
+	select RPMSG_CTRL
+	select RPMSG_CHAR
+	select HWSEM_MA35
+	help
+	  Say y here to enable support for MA35D1 AMP-M driver providing
+	  communication channels between A35 core and CM4 core in
+	  MA35D1 platforms for remote processor communication.
+
+config MA35_AMP
+	tristate "MA35 series AMP-A Driver"
+	depends on (ARCH_MA35D1 || ARCH_MA35D0 || ARCH_MA35H0)
+	default y
+	select RPMSG
+	select RPMSG_CTRL
+	select RPMSG_CHAR
+	select MA35D1_TIMER if ARCH_MA35D1
+	select MA35D0_TIMER if ARCH_MA35D0
+	select MA35H0_TIMER if ARCH_MA35H0
+	help
+	  Say y here to enable support for the MA35 series AMP-A driver
+	  providing communication channels between dual A35 cores in
+	  MA35 platforms for remote processor communication.
+
 endmenu

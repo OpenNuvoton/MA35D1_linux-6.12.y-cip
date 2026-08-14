@@ -1,200 +1,352 @@
-// SPDX-License-Identifier: GPL-2.0
+// SPDX-License-Identifier: GPL-2.0-or-later
 /*
- * RTC driver for Nuvoton MA35D1
+ * Copyright (c) 2026 Nuvoton technology corporation.
  *
- * Copyright (C) 2023 Nuvoton Technology Corp.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation;version 2 of the License.
+ *
  */
-
 #include <linux/bcd.h>
+#include <linux/bitfield.h>
 #include <linux/clk.h>
 #include <linux/delay.h>
 #include <linux/init.h>
 #include <linux/io.h>
 #include <linux/module.h>
+#include <linux/nvmem-provider.h>
 #include <linux/of.h>
+#include <linux/of_device.h>
+#include <linux/of_irq.h>
 #include <linux/platform_device.h>
 #include <linux/rtc.h>
+//#include <linux/slab.h>
 
-/* MA35D1 RTC Control Registers */
-#define MA35_REG_RTC_INIT	0x00
-#define MA35_REG_RTC_SINFASTS	0x04
-#define MA35_REG_RTC_FREQADJ	0x08
-#define MA35_REG_RTC_TIME	0x0c
-#define MA35_REG_RTC_CAL	0x10
-#define MA35_REG_RTC_CLKFMT	0x14
-#define MA35_REG_RTC_WEEKDAY	0x18
-#define MA35_REG_RTC_TALM	0x1c
-#define MA35_REG_RTC_CALM	0x20
-#define MA35_REG_RTC_LEAPYEAR	0x24
-#define MA35_REG_RTC_INTEN	0x28
-#define MA35_REG_RTC_INTSTS	0x2c
+/* RTC Control Registers */
+#define REG_RTC_INIT		0x00
 
-/* register MA35_REG_RTC_INIT */
-#define RTC_INIT_ACTIVE		BIT(0)
-#define RTC_INIT_MAGIC_CODE	0xa5eb1357
+#define REG_RTC_SINFASTS	0x04
+#define REG_RTC_FREQADJ		0x08
+#define REG_RTC_TIME		0x0c
+#define REG_RTC_CAL		0x10
+#define REG_RTC_CLKFMT		0x14
+#define REG_RTC_WEEKDAY		0x18
+#define REG_RTC_TALM		0x1c
+#define REG_RTC_CALM		0x20
+#define REG_RTC_LEAPYEAR	0x24
+#define REG_RTC_INTEN		0x28
+#define REG_RTC_INTSTS		0x2c
+#define REG_RTC_TICK		0x30
+#define REG_RTC_TAMSK		0x34
+#define REG_RTC_SPRCTL		0x3c
+#define REG_RTC_SPR(x)		(0x40 + ((x) * 4))
+#define REG_RTC_CLKDCTL		0x140
+#define REG_RTC_CDBR		0x144
 
-/* register MA35_REG_RTC_CLKFMT */
-#define RTC_CLKFMT_24HEN	BIT(0)
-#define RTC_CLKFMT_DCOMPEN	BIT(16)
+#define INIT_ACTIVE		BIT(0)
+#define RTC_INIT_MAGIC		0xa5eb1357
 
-/* register MA35_REG_RTC_INTEN */
-#define RTC_INTEN_ALMIEN	BIT(0)
-#define RTC_INTEN_UIEN		BIT(1)
-#define RTC_INTEN_CLKFIEN	BIT(24)
-#define RTC_INTEN_CLKSTIEN	BIT(25)
+#define CLKFMT_24HEN		BIT(0)
 
-/* register MA35_REG_RTC_INTSTS */
-#define RTC_INTSTS_ALMIF	BIT(0)
-#define RTC_INTSTS_UIF		BIT(1)
-#define RTC_INTSTS_CLKFIF	BIT(24)
-#define RTC_INTSTS_CLKSTIF	BIT(25)
+/* RTC Time Register Masks */
+#define TIME_SEC_MASK		GENMASK(6, 0)
+#define TIME_MIN_MASK		GENMASK(14, 8)
+#define TIME_HOUR_MASK		GENMASK(21, 16)
 
-#define RTC_INIT_TIMEOUT	250
+/* RTC Calendar Register Masks */
+#define CAL_DAY_MASK		GENMASK(5, 0)
+#define CAL_MON_MASK		GENMASK(12, 8)
+#define CAL_YEAR_MASK		GENMASK(23, 16)
 
-struct ma35_rtc {
-	int irq_num;
-	void __iomem *rtc_reg;
-	struct rtc_device *rtcdev;
+/* RTC Day of the Week Register Mask */
+#define WEEKDAY_MASK		GENMASK(2, 0)
+
+/* RTC Time Alarm Register Masks */
+#define TALM_SEC_MASK		GENMASK(6, 0)
+#define TALM_MIN_MASK		GENMASK(14, 8)
+#define TALM_HOUR_MASK		GENMASK(21, 16)
+
+/* RTC Calendar Alarm Register Masks */
+#define CALM_DAY_MASK		GENMASK(5, 0)
+#define CALM_MON_MASK		GENMASK(12, 8)
+#define CALM_YEAR_MASK		GENMASK(23, 16)
+
+#define INTEN_ALMIEN		BIT(0)
+#define INTEN_TICKIEN		BIT(1)
+#define INTEN_PSWIEN		BIT(2)
+#define INTEN_KPRSIEN		BIT(3)
+#define INTEN_CLKFIEN		BIT(24)
+#define INTEN_CLKSTIEN		BIT(25)
+
+#define INTSTS_ALMIF		BIT(0)
+#define INTSTS_TICKIF		BIT(1)
+#define INTSTS_PSWST		BIT(2)
+#define INTSTS_KPRSST		BIT(3)
+#define INTSTS_CLKFIF		BIT(24)
+#define INTSTS_CLKSTIF		BIT(25)
+
+#define CLKDCLT_LXTFDEN		BIT(0)
+
+#define CDBR_FAILBD_MASK	GENMASK(23, 16)
+#define CDBR_STOPBD_MASK	GENMASK(7, 0)
+
+#define LXT_DET_FAILBD_DEFAULT	0x80
+#define LXT_DET_STOPBD_DEFAULT	0x80
+
+#define TIME_SEC_SHIFT		0
+#define TIME_MIN_SHIFT		8
+#define TIME_HOUR_SHIFT		16
+#define CAL_DAY_SHIFT		0
+#define CAL_MON_SHIFT		8
+#define CAL_YEAR_SHIFT		16
+
+#define TICK_1_SEC		0x0
+#define TICK_1_2_SEC		0x1
+#define TICK_1_4_SEC		0x2
+#define TICK_1_8_SEC		0x3
+
+#define SPRCTL_SPRRWEN		BIT(2)
+
+#define MA35D1_RTC_NVMEM_SIZE	(16 * 4)
+
+struct ma35d1_rtc {
+	int irq;
+	void __iomem *base;
+	struct rtc_device *rtc_dev;
+	bool lxt_failed;
+	bool lxt_detect_enabled;
 };
 
-static u32 rtc_reg_read(struct ma35_rtc *p, u32 offset)
+struct ma35d1_bcd_time {
+	int bcd_sec;
+	int bcd_min;
+	int bcd_hour;
+	int bcd_mday;
+	int bcd_mon;
+	int bcd_year;
+};
+
+static u32 rtc_reg_read(struct ma35d1_rtc *rtc, int offset)
 {
-	return __raw_readl(p->rtc_reg + offset);
+	return readl_relaxed(rtc->base + offset);
 }
 
-static inline void rtc_reg_write(struct ma35_rtc *p, u32 offset, u32 value)
+static void rtc_reg_write(struct ma35d1_rtc *rtc, int offset, int value)
 {
-	__raw_writel(value, p->rtc_reg + offset);
+	writel_relaxed(value, rtc->base + offset);
 }
 
-static irqreturn_t ma35d1_rtc_interrupt(int irq, void *data)
+static irqreturn_t ma35d1_rtc_interrupt(int irq, void *_rtc)
 {
-	struct ma35_rtc *rtc = (struct ma35_rtc *)data;
-	unsigned long events = 0, rtc_irq;
+	struct ma35d1_rtc *rtc = _rtc;
+	u32 intsts;
+	u32 events = 0;
 
-	rtc_irq = rtc_reg_read(rtc, MA35_REG_RTC_INTSTS);
+	intsts = rtc_reg_read(rtc, REG_RTC_INTSTS);
 
-	if (rtc_irq & RTC_INTSTS_ALMIF) {
-		rtc_reg_write(rtc, MA35_REG_RTC_INTSTS, RTC_INTSTS_ALMIF);
+	if (intsts & INTSTS_PSWST) {
+		rtc_reg_write(rtc, REG_RTC_INTSTS, INTSTS_PSWST);
+
+		rtc_reg_write(rtc, REG_RTC_INTEN,
+			      rtc_reg_read(rtc, REG_RTC_INTEN) & ~INTEN_TICKIEN);
+	}
+
+	if (intsts & INTSTS_ALMIF) {
+		rtc_reg_write(rtc, REG_RTC_INTSTS, INTSTS_ALMIF);
 		events |= RTC_AF | RTC_IRQF;
 	}
 
-	rtc_update_irq(rtc->rtcdev, 1, events);
+	if (intsts & INTSTS_TICKIF) {
+		rtc_reg_write(rtc, REG_RTC_INTSTS, INTSTS_TICKIF);
+
+		if (!rtc->lxt_failed)
+			events |= RTC_UF | RTC_IRQF;
+	}
+
+	if (intsts & (INTSTS_CLKFIF | INTSTS_CLKSTIF)) {
+		rtc->lxt_failed = true;
+
+		rtc_reg_write(rtc, REG_RTC_INTEN, rtc_reg_read(rtc, REG_RTC_INTEN) &
+			      ~(INTEN_CLKFIEN | INTEN_CLKSTIEN));
+
+		rtc_reg_write(rtc, REG_RTC_INTSTS, (INTSTS_CLKFIF | INTSTS_CLKSTIF));
+	}
+
+	if (events)
+		rtc_update_irq(rtc->rtc_dev, 1, events);
 
 	return IRQ_HANDLED;
 }
 
-static int ma35d1_rtc_init(struct ma35_rtc *rtc, u32 ms_timeout)
+static int check_rtc_access_enable(struct ma35d1_rtc *rtc)
 {
-	const unsigned long timeout = jiffies + msecs_to_jiffies(ms_timeout);
-
-	do {
-		if (rtc_reg_read(rtc, MA35_REG_RTC_INIT) & RTC_INIT_ACTIVE)
-			return 0;
-
-		rtc_reg_write(rtc, MA35_REG_RTC_INIT, RTC_INIT_MAGIC_CODE);
-
+	if (!(rtc_reg_read(rtc, REG_RTC_INIT) & INIT_ACTIVE)) {
+		rtc_reg_write(rtc, REG_RTC_INIT, RTC_INIT_MAGIC);
 		mdelay(1);
-
-	} while (time_before(jiffies, timeout));
-
-	return -ETIMEDOUT;
+		if (!(rtc_reg_read(rtc, REG_RTC_INIT) & INIT_ACTIVE)) {
+			dev_err(rtc->rtc_dev->dev.parent, "RTC access is not enabled\n");
+			return -EIO;
+		}
+	}
+	return 0;
 }
 
-static int ma35d1_alarm_irq_enable(struct device *dev, u32 enabled)
+static int ma35d1_rtc_bcd2bin(u32 timereg, u32 calreg, u32 wdayreg, struct rtc_time *tm)
 {
-	struct ma35_rtc *rtc = dev_get_drvdata(dev);
-	u32 reg_ien;
+	tm->tm_mday = bcd2bin(FIELD_GET(CAL_DAY_MASK, calreg));
 
-	reg_ien = rtc_reg_read(rtc, MA35_REG_RTC_INTEN);
+	/* RTC reports 1-12, struct rtc_time expects 0-11 */
+	tm->tm_mon  = bcd2bin(FIELD_GET(CAL_MON_MASK, calreg)) - 1;
 
-	if (enabled)
-		rtc_reg_write(rtc, MA35_REG_RTC_INTEN, reg_ien | RTC_INTEN_ALMIEN);
-	else
-		rtc_reg_write(rtc, MA35_REG_RTC_INTEN, reg_ien & ~RTC_INTEN_ALMIEN);
+	/* RTC reports 0-99, struct rtc_time expects years since 1900 (e.g. 2000 = 100) */
+	tm->tm_year = bcd2bin(FIELD_GET(CAL_YEAR_MASK, calreg)) + 100;
+
+	tm->tm_sec  = bcd2bin(FIELD_GET(TIME_SEC_MASK, timereg));
+	tm->tm_min  = bcd2bin(FIELD_GET(TIME_MIN_MASK, timereg));
+	tm->tm_hour = bcd2bin(FIELD_GET(TIME_HOUR_MASK, timereg));
+
+	tm->tm_wday = FIELD_GET(WEEKDAY_MASK, wdayreg);
+
+	return rtc_valid_tm(tm);
+}
+
+static int ma35d1_rtc_alarm_bcd2bin(u32 timereg, u32 calreg, struct rtc_time *tm)
+{
+	tm->tm_mday = bcd2bin(FIELD_GET(CALM_DAY_MASK, calreg));
+	tm->tm_mon  = bcd2bin(FIELD_GET(CALM_MON_MASK, calreg)) - 1;
+	tm->tm_year = bcd2bin(FIELD_GET(CALM_YEAR_MASK, calreg)) + 100;
+
+	tm->tm_sec  = bcd2bin(FIELD_GET(TALM_SEC_MASK, timereg));
+	tm->tm_min  = bcd2bin(FIELD_GET(TALM_MIN_MASK, timereg));
+	tm->tm_hour = bcd2bin(FIELD_GET(TALM_HOUR_MASK, timereg));
+
+	return rtc_valid_tm(tm);
+}
+
+static void ma35d1_rtc_bin2bcd(struct device *dev, struct rtc_time *settm,
+			       struct ma35d1_bcd_time *gettm)
+{
+	gettm->bcd_mday = FIELD_PREP(CAL_DAY_MASK, bin2bcd(settm->tm_mday));
+	gettm->bcd_mon  = FIELD_PREP(CAL_MON_MASK, bin2bcd(settm->tm_mon + 1));
+
+	if (settm->tm_year < 100) {
+		dev_warn(dev, "The year is before 2000, setting raw value\n");
+		gettm->bcd_year = FIELD_PREP(CAL_YEAR_MASK, bin2bcd(settm->tm_year));
+	} else {
+		gettm->bcd_year = FIELD_PREP(CAL_YEAR_MASK, bin2bcd(settm->tm_year - 100));
+	}
+
+	/* Time: Sec, Min, Hour */
+	gettm->bcd_sec  = FIELD_PREP(TIME_SEC_MASK, bin2bcd(settm->tm_sec));
+	gettm->bcd_min  = FIELD_PREP(TIME_MIN_MASK, bin2bcd(settm->tm_min));
+	gettm->bcd_hour = FIELD_PREP(TIME_HOUR_MASK, bin2bcd(settm->tm_hour));
+}
+
+static int ma35d1_alarm_irq_enable(struct device *dev, unsigned int enabled)
+{
+	struct ma35d1_rtc *rtc = dev_get_drvdata(dev);
+
+	if (enabled) {
+		rtc_reg_write(rtc, REG_RTC_INTEN,
+			      (rtc_reg_read(rtc, REG_RTC_INTEN) | INTEN_ALMIEN));
+	} else {
+		rtc_reg_write(rtc, REG_RTC_INTEN,
+			      (rtc_reg_read(rtc, REG_RTC_INTEN) & ~INTEN_ALMIEN));
+	}
 
 	return 0;
 }
 
 static int ma35d1_rtc_read_time(struct device *dev, struct rtc_time *tm)
 {
-	struct ma35_rtc *rtc = dev_get_drvdata(dev);
-	u32 time, cal, wday;
+	struct ma35d1_rtc *rtc = dev_get_drvdata(dev);
+	u32 timeval, clrval, wdayval;
+	u32 intsts;
 
-	do {
-		time = rtc_reg_read(rtc, MA35_REG_RTC_TIME);
-		cal  = rtc_reg_read(rtc, MA35_REG_RTC_CAL);
-		wday = rtc_reg_read(rtc, MA35_REG_RTC_WEEKDAY);
-	} while (time != rtc_reg_read(rtc, MA35_REG_RTC_TIME) ||
-		 cal != rtc_reg_read(rtc, MA35_REG_RTC_CAL));
+	intsts = rtc_reg_read(rtc, REG_RTC_INTSTS);
 
-	tm->tm_mday = bcd2bin(cal >> 0);
-	tm->tm_wday = wday;
-	tm->tm_mon = bcd2bin(cal >> 8);
-	tm->tm_mon = tm->tm_mon - 1;
-	tm->tm_year = bcd2bin(cal >> 16) + 100;
+	if (rtc->lxt_failed)
+		return -EIO;
 
-	tm->tm_sec = bcd2bin(time >> 0);
-	tm->tm_min = bcd2bin(time >> 8);
-	tm->tm_hour = bcd2bin(time >> 16);
+	timeval = rtc_reg_read(rtc, REG_RTC_TIME);
+	clrval  = rtc_reg_read(rtc, REG_RTC_CAL);
+	wdayval = rtc_reg_read(rtc, REG_RTC_WEEKDAY);
 
-	return rtc_valid_tm(tm);
+	return ma35d1_rtc_bcd2bin(timeval, clrval, wdayval, tm);
 }
 
 static int ma35d1_rtc_set_time(struct device *dev, struct rtc_time *tm)
 {
-	struct ma35_rtc *rtc = dev_get_drvdata(dev);
-	u32 val;
+	struct ma35d1_rtc *rtc = dev_get_drvdata(dev);
+	struct ma35d1_bcd_time gettm;
+	unsigned long val;
+	int ret;
 
-	val = bin2bcd(tm->tm_mday) << 0 | bin2bcd(tm->tm_mon + 1) << 8 |
-	      bin2bcd(tm->tm_year - 100) << 16;
-	rtc_reg_write(rtc, MA35_REG_RTC_CAL, val);
+	if (rtc->lxt_failed)
+		return -EIO;
 
-	val = bin2bcd(tm->tm_sec) << 0 | bin2bcd(tm->tm_min) << 8 |
-	      bin2bcd(tm->tm_hour) << 16;
-	rtc_reg_write(rtc, MA35_REG_RTC_TIME, val);
+	ma35d1_rtc_bin2bcd(dev, tm, &gettm);
+
+	ret = check_rtc_access_enable(rtc);
+	if (ret)
+		return ret;
+
+	val = gettm.bcd_mday | gettm.bcd_mon | gettm.bcd_year;
+	rtc_reg_write(rtc, REG_RTC_CAL, val);
+
+	val = gettm.bcd_sec | gettm.bcd_min | gettm.bcd_hour;
+	rtc_reg_write(rtc, REG_RTC_TIME, val);
 
 	val = tm->tm_wday;
-	rtc_reg_write(rtc, MA35_REG_RTC_WEEKDAY, val);
+	rtc_reg_write(rtc, REG_RTC_WEEKDAY, val);
 
 	return 0;
 }
 
 static int ma35d1_rtc_read_alarm(struct device *dev, struct rtc_wkalrm *alrm)
 {
-	struct ma35_rtc *rtc = dev_get_drvdata(dev);
-	u32 talm, calm;
+	struct ma35d1_rtc *rtc = dev_get_drvdata(dev);
+	u32 inten, intsts;
+	u32 timeval, carval;
 
-	talm = rtc_reg_read(rtc, MA35_REG_RTC_TALM);
-	calm = rtc_reg_read(rtc, MA35_REG_RTC_CALM);
+	timeval = rtc_reg_read(rtc, REG_RTC_TALM);
+	carval  = rtc_reg_read(rtc, REG_RTC_CALM);
 
-	alrm->time.tm_mday = bcd2bin(calm >> 0);
-	alrm->time.tm_mon = bcd2bin(calm >> 8);
-	alrm->time.tm_mon = alrm->time.tm_mon - 1;
+	inten = rtc_reg_read(rtc, REG_RTC_INTEN);
+	intsts = rtc_reg_read(rtc, REG_RTC_INTSTS);
 
-	alrm->time.tm_year = bcd2bin(calm >> 16) + 100;
+	alrm->enabled = !!(inten & INTEN_ALMIEN);
+	alrm->pending = !!(intsts & INTSTS_ALMIF);
 
-	alrm->time.tm_sec = bcd2bin(talm >> 0);
-	alrm->time.tm_min = bcd2bin(talm >> 8);
-	alrm->time.tm_hour = bcd2bin(talm >> 16);
-
-	return rtc_valid_tm(&alrm->time);
+	return ma35d1_rtc_alarm_bcd2bin(timeval, carval, &alrm->time);
 }
 
 static int ma35d1_rtc_set_alarm(struct device *dev, struct rtc_wkalrm *alrm)
 {
-	struct ma35_rtc *rtc = dev_get_drvdata(dev);
-	unsigned long val;
+	struct ma35d1_rtc *rtc = dev_get_drvdata(dev);
+	struct ma35d1_bcd_time tm;
+	u32 cal_val, time_val;
+	int ret;
 
-	val = bin2bcd(alrm->time.tm_mday) << 0 | bin2bcd(alrm->time.tm_mon + 1) << 8 |
-	      bin2bcd(alrm->time.tm_year - 100) << 16;
-	rtc_reg_write(rtc, MA35_REG_RTC_CALM, val);
+	ret = check_rtc_access_enable(rtc);
+	if (ret)
+		return ret;
 
-	val = bin2bcd(alrm->time.tm_sec) << 0 | bin2bcd(alrm->time.tm_min) << 8 |
-	      bin2bcd(alrm->time.tm_hour) << 16;
-	rtc_reg_write(rtc, MA35_REG_RTC_TALM, val);
+	ma35d1_rtc_bin2bcd(dev, &alrm->time, &tm);
 
-	ma35d1_alarm_irq_enable(dev, alrm->enabled);
+	cal_val = tm.bcd_mday | tm.bcd_mon | tm.bcd_year;
+	time_val = tm.bcd_sec | tm.bcd_min | tm.bcd_hour;
+
+	rtc_reg_write(rtc, REG_RTC_INTSTS, INTSTS_ALMIF);
+	rtc_reg_write(rtc, REG_RTC_CALM, cal_val);
+	rtc_reg_write(rtc, REG_RTC_TALM, time_val);
+
+	/* Disable all alarm masks to enable precise time and date matching */
+	rtc_reg_write(rtc, REG_RTC_TAMSK, 0);
+
+	if (alrm->enabled)
+		ma35d1_alarm_irq_enable(dev, 1);
 
 	return 0;
 }
@@ -207,98 +359,219 @@ static const struct rtc_class_ops ma35d1_rtc_ops = {
 	.alarm_irq_enable = ma35d1_alarm_irq_enable,
 };
 
+static int ma35d1_rtc_nvram_read(void *priv, unsigned int offset,
+				 void *val, size_t bytes)
+{
+	struct ma35d1_rtc *rtc = priv;
+	u8 *buf = val;
+	unsigned int i;
+
+	if (offset + bytes > MA35D1_RTC_NVMEM_SIZE)
+		return -EINVAL;
+
+	for (i = 0; i < bytes; i++) {
+		unsigned int reg = REG_RTC_SPR((offset + i) / 4);
+		u32 data = rtc_reg_read(rtc, reg);
+
+		buf[i] = (data >> (((offset + i) % 4) * 8)) & 0xff;
+	}
+
+	return 0;
+}
+
+static int ma35d1_rtc_nvram_write(void *priv, unsigned int offset,
+				  void *val, size_t bytes)
+{
+	struct ma35d1_rtc *rtc = priv;
+	const u8 *buf = val;
+	unsigned int i;
+
+	if (offset + bytes > MA35D1_RTC_NVMEM_SIZE)
+		return -EINVAL;
+
+	rtc_reg_write(rtc, REG_RTC_SPRCTL, SPRCTL_SPRRWEN);
+
+	for (i = 0; i < bytes; i++) {
+		unsigned int reg = REG_RTC_SPR((offset + i) / 4);
+		u32 old = rtc_reg_read(rtc, reg);
+		u32 shift = ((offset + i) % 4) * 8;
+
+		old &= ~(0xff << shift);
+		old |= (buf[i] << shift);
+
+		rtc_reg_write(rtc, reg, old);
+	}
+
+	return 0;
+}
+
 static int ma35d1_rtc_probe(struct platform_device *pdev)
 {
-	struct ma35_rtc *rtc;
+	struct ma35d1_rtc *rtc;
 	struct clk *clk;
-	int ret;
+	u32 val32;
+	int err;
+	struct nvmem_config nvmem_cfg = {
+		.name = "ma35d1-rtc-nvmem",
+		.stride = 1,
+		.word_size = 1,
+		.size = MA35D1_RTC_NVMEM_SIZE,
+		.type = NVMEM_TYPE_BATTERY_BACKED,
+		.reg_read = ma35d1_rtc_nvram_read,
+		.reg_write = ma35d1_rtc_nvram_write,
+	};
 
-	rtc = devm_kzalloc(&pdev->dev, sizeof(*rtc), GFP_KERNEL);
+	rtc = devm_kzalloc(&pdev->dev, sizeof(struct ma35d1_rtc), GFP_KERNEL);
 	if (!rtc)
 		return -ENOMEM;
 
-	rtc->rtc_reg = devm_platform_ioremap_resource(pdev, 0);
-	if (IS_ERR(rtc->rtc_reg))
-		return PTR_ERR(rtc->rtc_reg);
+	rtc->base = devm_platform_ioremap_resource(pdev, 0);
+	if (IS_ERR(rtc->base))
+		return PTR_ERR(rtc->base);
 
 	clk = of_clk_get(pdev->dev.of_node, 0);
-	if (IS_ERR(clk))
-		return dev_err_probe(&pdev->dev, PTR_ERR(clk), "failed to find rtc clock\n");
-
-	ret = clk_prepare_enable(clk);
-	if (ret)
-		return ret;
-
-	if (!(rtc_reg_read(rtc, MA35_REG_RTC_INIT) & RTC_INIT_ACTIVE)) {
-		ret = ma35d1_rtc_init(rtc, RTC_INIT_TIMEOUT);
-		if (ret)
-			return dev_err_probe(&pdev->dev, ret, "rtc init failed\n");
+	if (IS_ERR(clk)) {
+		err = PTR_ERR(clk);
+		dev_err(&pdev->dev, "failed to get core clk: %d\n", err);
+		return -ENOENT;
 	}
-
-	rtc->irq_num = platform_get_irq(pdev, 0);
-
-	ret = devm_request_irq(&pdev->dev, rtc->irq_num, ma35d1_rtc_interrupt,
-			       IRQF_NO_SUSPEND, "ma35d1rtc", rtc);
-	if (ret)
-		return dev_err_probe(&pdev->dev, ret, "Failed to request rtc irq\n");
+	err = clk_prepare_enable(clk);
+	if (err)
+		return -ENOENT;
 
 	platform_set_drvdata(pdev, rtc);
 
+	err = check_rtc_access_enable(rtc);
+	if (err)
+		return err;
+
+	rtc_reg_write(rtc, REG_RTC_CLKFMT,
+		      (rtc_reg_read(rtc, REG_RTC_CLKFMT) | CLKFMT_24HEN));
+
+	rtc->irq = platform_get_irq(pdev, 0);
+
+	if (devm_request_irq(&pdev->dev, rtc->irq, ma35d1_rtc_interrupt, 0,
+			     "ma35d1rtc", rtc)) {
+		dev_err(&pdev->dev, "ma35d1 RTC request irq failed\n");
+		return -EBUSY;
+	}
+
+	rtc_reg_write(rtc, REG_RTC_TICK, TICK_1_SEC);
+
+	if (of_property_read_u32_array(pdev->dev.of_node,
+				       "lxt-detect-enable", &val32, 1) != 0) {
+		dev_err(&pdev->dev, "can not get lxt-detect-enable flag !\n");
+		return -EINVAL;
+	}
+
+	rtc->lxt_failed = false;
+
+	if (val32 == 1) {
+		u32 cdbr_val;
+
+		rtc->lxt_detect_enabled = true;
+
+		cdbr_val = FIELD_PREP(CDBR_FAILBD_MASK, LXT_DET_FAILBD_DEFAULT) |
+			   FIELD_PREP(CDBR_STOPBD_MASK, LXT_DET_STOPBD_DEFAULT);
+		rtc_reg_write(rtc, REG_RTC_CDBR, cdbr_val);
+
+		rtc_reg_write(rtc, REG_RTC_CLKDCTL,
+			      (rtc_reg_read(rtc, REG_RTC_CLKDCTL) | CLKDCLT_LXTFDEN));
+
+		rtc_reg_write(rtc, REG_RTC_INTEN,
+			      (rtc_reg_read(rtc, REG_RTC_INTEN) | INTEN_TICKIEN |
+			      INTEN_CLKSTIEN | INTEN_CLKFIEN | INTEN_PSWIEN));
+	} else {
+		rtc->lxt_detect_enabled = false;
+
+		rtc_reg_write(rtc, REG_RTC_CDBR, 0x0);
+
+		rtc_reg_write(rtc, REG_RTC_CLKDCTL,
+			      (rtc_reg_read(rtc, REG_RTC_CLKDCTL) & ~CLKDCLT_LXTFDEN));
+
+		rtc_reg_write(rtc, REG_RTC_INTEN,
+			      (rtc_reg_read(rtc, REG_RTC_INTEN) |
+			      INTEN_TICKIEN | INTEN_PSWIEN));
+	}
+
 	device_init_wakeup(&pdev->dev, true);
 
-	rtc->rtcdev = devm_rtc_allocate_device(&pdev->dev);
-	if (IS_ERR(rtc->rtcdev))
-		return PTR_ERR(rtc->rtcdev);
+	rtc->rtc_dev = devm_rtc_device_register(&pdev->dev, pdev->name,
+						&ma35d1_rtc_ops, THIS_MODULE);
+	if (IS_ERR(rtc->rtc_dev)) {
+		dev_err(&pdev->dev, "rtc device register failed\n");
+		return PTR_ERR(rtc->rtc_dev);
+	}
 
-	rtc->rtcdev->ops = &ma35d1_rtc_ops;
-	rtc->rtcdev->range_min = RTC_TIMESTAMP_BEGIN_2000;
-	rtc->rtcdev->range_max = RTC_TIMESTAMP_END_2099;
+	nvmem_cfg.priv = rtc;
+	err = devm_rtc_nvmem_register(rtc->rtc_dev, &nvmem_cfg);
+	if (err) {
+		dev_err(&pdev->dev, "failed to register rtc nvmem: %d\n", err);
+		return err;
+	}
 
-	ret = devm_rtc_register_device(rtc->rtcdev);
-	if (ret)
-		return dev_err_probe(&pdev->dev, ret, "Failed to register rtc device\n");
+	return 0;
+}
+
+static int __exit ma35d1_rtc_remove(struct platform_device *pdev)
+{
+	device_init_wakeup(&pdev->dev, 0);
+
+	platform_set_drvdata(pdev, NULL);
 
 	return 0;
 }
 
 static int ma35d1_rtc_suspend(struct platform_device *pdev, pm_message_t state)
 {
-	struct ma35_rtc *rtc = platform_get_drvdata(pdev);
+	struct ma35d1_rtc *rtc = platform_get_drvdata(pdev);
 
 	if (device_may_wakeup(&pdev->dev))
-		enable_irq_wake(rtc->irq_num);
+		enable_irq_wake(rtc->irq);
+
+	rtc_reg_write(rtc, REG_RTC_INTEN,
+		      (rtc_reg_read(rtc, REG_RTC_INTEN) & ~INTEN_TICKIEN));
 
 	return 0;
 }
 
 static int ma35d1_rtc_resume(struct platform_device *pdev)
 {
-	struct ma35_rtc *rtc = platform_get_drvdata(pdev);
+	struct ma35d1_rtc *rtc = platform_get_drvdata(pdev);
 
 	if (device_may_wakeup(&pdev->dev))
-		disable_irq_wake(rtc->irq_num);
+		disable_irq_wake(rtc->irq);
+
+	rtc_reg_write(rtc, REG_RTC_INTEN,
+		      (rtc_reg_read(rtc, REG_RTC_INTEN) | INTEN_TICKIEN));
 
 	return 0;
 }
 
 static const struct of_device_id ma35d1_rtc_of_match[] = {
-	{ .compatible = "nuvoton,ma35d1-rtc", },
+	{ .compatible = "nuvoton,ma35d1-rtc"},
+	{ .compatible = "nuvoton,ma35d0-rtc"},
+	{ .compatible = "nuvoton,ma35h0-rtc"},
 	{},
 };
 MODULE_DEVICE_TABLE(of, ma35d1_rtc_of_match);
 
+
 static struct platform_driver ma35d1_rtc_driver = {
+	.remove     = __exit_p(ma35d1_rtc_remove),
 	.suspend    = ma35d1_rtc_suspend,
 	.resume     = ma35d1_rtc_resume,
 	.probe      = ma35d1_rtc_probe,
 	.driver		= {
-		.name	= "rtc-ma35d1",
+		.name	= "ma35d1-rtc",
+		.owner	= THIS_MODULE,
 		.of_match_table = ma35d1_rtc_of_match,
 	},
 };
 
 module_platform_driver(ma35d1_rtc_driver);
 
-MODULE_AUTHOR("Ming-Jen Chen <mjchen@nuvoton.com>");
-MODULE_DESCRIPTION("MA35D1 RTC driver");
+MODULE_AUTHOR("nuvoton");
+MODULE_DESCRIPTION("ma35d1 RTC driver");
 MODULE_LICENSE("GPL");
+MODULE_ALIAS("platform:ma35d1-rtc");

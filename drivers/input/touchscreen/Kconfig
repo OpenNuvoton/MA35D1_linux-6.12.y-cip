@@ -1388,4 +1388,14 @@ config TOUCHSCREEN_HIMAX_HX83112B
 	  To compile this driver as a module, choose M here: the
 	  module will be called himax_hx83112b.
 
+config TOUCHSCREEN_MA35
+	tristate "MA35 series touchscreen(ADC) support"
+	depends on ARCH_MA35D1 || ARCH_MA35D0 || ARCH_MA35H0
+	default y
+	select INPUT_EVDEV
+	help
+	  This selects support for the resistive touchscreen controller
+	  found on Nuvoton MA35 series. The ADC driver is also implement
+	  in this driver.
+
 endif

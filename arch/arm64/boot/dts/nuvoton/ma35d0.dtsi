@@ -115,7 +115,7 @@
 		#size-cells = <2>;
 		ranges;
 		amp_buf: amp_buf@0 {
-			reg = <0x0 0x84000000 0x0 0x8800>;
+			reg = <0x0 0x84000000 0x0 0x9000>;
 			no-map;
 		};
 	};
@@ -378,7 +378,7 @@
 		interrupts = <GIC_SPI 39 IRQ_TYPE_LEVEL_HIGH>;
 		rsa_ioctl = "yes";           /* yes: RSA via ioctl, no: RSA via akcipher   */
 		ecc_ioctl = "yes";           /* yes: ECC via ioctl, no: ECDH via akcipher */
-		status = "disable";
+		status = "okay";
 	};
 
 	/* Key Store */
@@ -507,22 +507,12 @@
 		interrupts = <GIC_SPI 70 IRQ_TYPE_LEVEL_HIGH>;
 		clocks = <&clk I2S0_GATE>;
 		resets = <&reset MA35D0_RESET_I2S0>;
-		pdma_reqsel_tx = <86>;
-		pdma_reqsel_rx = <87>;
-		mclk_out = <12000000>;
-		status = "disable";
-	};
-
-	i2s_pcm: i2s_pcm {
-		compatible = "nuvoton,ma35d0-audio-pcm";
-		status = "disable";
-	};
-
-	sound: sound {
-		compatible = "nuvoton,ma35d0-audio";
-		i2s-controller = <&i2s0>;
-		i2s-platform = <&i2s_pcm>;
-		status = "disable";
+		dmas = <&pdma2 0>, <&pdma2 1>;
+		dma-names = "tx", "rx";
+		nuvoton,pdma-reqsel-tx = <86>;
+		nuvoton,pdma-reqsel-rx = <87>;
+		#sound-dai-cells = <0>;
+		status = "disabled";
 	};
 
 	hwsem: hwspinlock@40380000 {
@@ -563,25 +553,26 @@
 		reg = <0x0 0x40120000 0x0 0x10000>;
 		interrupts = <GIC_SPI 23 IRQ_TYPE_LEVEL_HIGH>;
 		interrupt-names = "macirq";
-		phy-mode = "rmii";
-		nuvoton,sys = <&sys 0>;
 		clocks = <&clk EMAC0_GATE>, <&clk EPLL_DIV8>;
 		clock-names = "stmmaceth", "ptp_ref";
+
+		nuvoton,sys = <&sys 0>;
 		resets = <&reset MA35D0_RESET_EMAC0>;
 		reset-names = "stmmaceth";
-		clk_csr = <4>;
-		status = "disable";
+
+		phy-mode = "rmii";
 		phy-handle = <&eth_phy0>;
-		mdio0 {
+		status = "disabled";
+
+		mdio0: mdio {
 			compatible = "snps,dwmac-mdio";
 			#address-cells = <1>;
 			#size-cells = <0>;
 
 			eth_phy0: ethernet-phy@0 {
-				reg = <1>;
+				reg = <0>;
 			};
 		};
-
 	};
 
 	emac1: ethernet@40130000 {
@@ -589,26 +580,26 @@
 		reg = <0x0 0x40130000 0x0 0x10000>;
 		interrupts = <GIC_SPI 24 IRQ_TYPE_LEVEL_HIGH>;
 		interrupt-names = "macirq";
-		phy-mode = "rmii";
-		nuvoton,sys = <&sys 1>;
 		clocks = <&clk EMAC1_GATE>, <&clk EPLL_DIV8>;
 		clock-names = "stmmaceth", "ptp_ref";
+
+		nuvoton,sys = <&sys 1>;
 		resets = <&reset MA35D0_RESET_EMAC1>;
 		reset-names = "stmmaceth";
-		mac-id = <1>;
-		clk_csr = <4>;
-		status = "disable";
+
+		phy-mode = "rmii";
 		phy-handle = <&eth_phy1>;
-		mdio1 {
+		status = "disabled";
+
+		mdio1: mdio {
 			compatible = "snps,dwmac-mdio";
 			#address-cells = <1>;
 			#size-cells = <0>;
 
 			eth_phy1: ethernet-phy@1 {
-				reg = <2>;
+				reg = <1>;
 			};
 		};
-
 	};
 
 	pinctrl: pinctrl {
@@ -1000,7 +991,7 @@
 				};
 				rootfs@1c00000 {
 					label = "nand-rootfs";
-					reg = <0x1C00000 0x6400000>;
+					reg = <0x1C00000 0x0>;
 				};
 			};
 		};
@@ -1293,17 +1284,8 @@
 		clocks = <&clk QSPI0_GATE>;
 		dmas = <&pdma1 0>,<&pdma1 1>;
 		dma-names = "tx","rx";
-		pdma_reqsel_tx = <54>;
-		pdma_reqsel_rx = <55>;
-		use_pdma = <1>;
-		num_cs = <2>;
-		lsb = <0>;
-		sleep = <0>;
-		txbitlen = <8>;
-		quad = <0>;
-		bus_num = <0>;
-		spimode = <0>;
-		mrxphase = <0>;
+		nuvoton,pdma-reqsel-tx = <54>;
+		nuvoton,pdma-reqsel-rx = <55>;
 		status = "disabled";
 
 		#address-cells = <1>;
@@ -1311,8 +1293,10 @@
 
 		flash: flash@0 {
 			compatible = "spi-nand";
-			reg = <0 0x0 0x2000000>;
-			spi-max-frequency = <50000000>;
+			reg = <0>;
+			spi-max-frequency = <30000000>;
+			spi-rx-bus-width = <4>;
+
 			#address-cells = <1>;
 			#size-cells = <1>;
 
@@ -1352,17 +1336,9 @@
 		clocks = <&clk SPI0_GATE>;
 		dmas = <&pdma1 4>,<&pdma1 5>;
 		dma-names = "tx","rx";
-		pdma_reqsel_tx = <60>;
-		pdma_reqsel_rx = <61>;
-		use_pdma = <0>;
-		num_cs = <2>;
-		lsb = <0>;
-		sleep = <0>;
-		txbitlen = <8>;
-		bus_num = <2>;
-		spimode = <0>;
-		mrxphase = <0>;
-		spi-max-frequency = <10000000>;
+		nuvoton,pdma-reqsel-tx = <60>;
+		nuvoton,pdma-reqsel-rx = <61>;
+		spi-max-frequency = <30000000>;
 		status = "disabled";
 	};
 
@@ -1373,17 +1349,9 @@
 		clocks = <&clk SPI1_GATE>;
 		dmas = <&pdma1 6>,<&pdma1 7>;
 		dma-names = "tx","rx";
-		pdma_reqsel_tx = <62>;
-		pdma_reqsel_rx = <63>;
-		use_pdma = <0>;
-		num_cs = <2>;
-		lsb = <0>;
-		sleep = <0>;
-		txbitlen = <8>;
-		bus_num = <3>;
-		spimode = <0>;
-		mrxphase = <0>;
-		spi-max-frequency = <10000000>;
+		nuvoton,pdma-reqsel-tx = <62>;
+		nuvoton,pdma-reqsel-rx = <63>;
+		spi-max-frequency = <30000000>;
 		status = "disabled";
 	};
 
