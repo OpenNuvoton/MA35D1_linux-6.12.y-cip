@@ -237,6 +237,10 @@
 	};
 };
 
+&pdma2 {
+	status = "okay";
+};
+
 &i2s0 {
 	status = "okay";
 	pinctrl-names = "default";
