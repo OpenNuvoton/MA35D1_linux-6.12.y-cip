@@ -225,7 +225,7 @@
 		clock-names = "hclk", "cclk";
 		bosch,mram-cfg = <0x0 4 4 32 32 32 8 8>;
 
-		status = "disable";
+		status = "disabled";
 	};
 
 	can1: can@403D0000 {
@@ -240,7 +240,7 @@
 		clock-names = "hclk", "cclk";
 		bosch,mram-cfg = <0x0 4 4 32 32 32 8 8>;
 
-		status = "disable";
+		status = "disabled";
 	};
 
 	ehci0: ehci@40140000 {
@@ -404,7 +404,7 @@
 		resets = <&reset MA35H0_RESET_I2C0>;
 		#address-cells = <1>;
 		#size-cells = <0>;
-		status = "disable";
+		status = "disabled";
 	};
 
 	i2c4: i2c@40840000 {
@@ -416,7 +416,7 @@
 		resets = <&reset MA35H0_RESET_I2C4>;
 		#address-cells = <1>;
 		#size-cells = <0>;
-		status = "disable";
+		status = "disabled";
 	};
 
 	i2c5: i2c@40850000 {
@@ -428,7 +428,7 @@
 		resets = <&reset MA35H0_RESET_I2C5>;
 		#address-cells = <1>;
 		#size-cells = <0>;
-		status = "disable";
+		status = "disabled";
 	};
 
 	i2s0: i2s@40480000 {
