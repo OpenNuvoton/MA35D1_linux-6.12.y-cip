@@ -17,8 +17,6 @@
 #include <linux/platform_device.h>
 #include <linux/slab.h>
 
-//#define MA35_SUPPORT_SUBPAGE_WRITE
-
 /* NFI Registers */
 #define MA35_NFI_REG_DMACTL		0x400
 #define   DMA_EN				BIT(0)
@@ -526,7 +524,6 @@ static int ma35_nand_do_read(struct nand_chip *chip, u8 *addr, u32 len)
 	return ret;
 }
 
-#ifdef MA35_SUPPORT_SUBPAGE_WRITE
 static int ma35_nand_format_subpage(struct nand_chip *chip, u32 offset,
 				    u32 len, const u8 *buf)
 {
@@ -592,7 +589,6 @@ static int ma35_nand_write_subpage_hwecc(struct nand_chip *chip, u32 offset,
 
 	return 0;
 }
-#endif
 
 static int ma35_nand_write_page_hwecc(struct nand_chip *chip, const u8 *buf,
 				      int oob_required, int page)
@@ -625,7 +621,6 @@ static int ma35_nand_write_page_hwecc(struct nand_chip *chip, const u8 *buf,
 	return 0;
 }
 
-#ifdef MA35_SUPPORT_SUBPAGE_WRITE
 static int ma35_nand_read_subpage_hwecc(struct nand_chip *chip, u32 offset,
 					u32 data_len, u8 *buf, int page)
 {
@@ -657,7 +652,6 @@ static int ma35_nand_read_subpage_hwecc(struct nand_chip *chip, u32 offset,
 
 	return bitflips;
 }
-#endif
 
 static int ma35_nand_read_page_hwecc(struct nand_chip *chip, u8 *buf,
 				     int oob_required, int page)
@@ -771,13 +765,13 @@ static int ma35_nand_attach_chip(struct nand_chip *chip)
 		/* Do not store BBT bits in the OOB section as it is not protected */
 		if (chip->bbt_options & NAND_BBT_USE_FLASH)
 			chip->bbt_options |= NAND_BBT_NO_OOB;
-#ifdef MA35_SUPPORT_SUBPAGE_WRITE
-		chip->options |= NAND_USES_DMA | NAND_SUBPAGE_READ;
+		/*
+		 * Keep the subpage callbacks available for validation, but do not
+		 * expose subpage access until the implementation is fully verified.
+		*/
+		chip->options |= NAND_NO_SUBPAGE_WRITE | NAND_USES_DMA;
 		chip->ecc.write_subpage = ma35_nand_write_subpage_hwecc;
 		chip->ecc.read_subpage = ma35_nand_read_subpage_hwecc;
-#else
-		chip->options |= NAND_NO_SUBPAGE_WRITE | NAND_USES_DMA;
-#endif
 		chip->ecc.write_page = ma35_nand_write_page_hwecc;
 		chip->ecc.read_page  = ma35_nand_read_page_hwecc;
 		chip->ecc.read_oob   = ma35_nand_read_oob_hwecc;
