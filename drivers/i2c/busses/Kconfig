@@ -1534,8 +1534,8 @@ config I2C_VIRTIO
           This driver can also be built as a module. If so, the module
           will be called i2c-virtio.
 
-config I2C_MA35D1
-	tristate "MA35D1 I2C support"
+config I2C_MA35
+	tristate "MA35 I2C support"
 	depends on ARCH_MA35D1 || ARCH_MA35D0 || ARCH_MA35H0
 	default y
 	select I2C_SLAVE
