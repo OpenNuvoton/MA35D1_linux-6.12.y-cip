@@ -1014,8 +1014,6 @@ static DEFINE_SIMPLE_DEV_PM_OPS(ma35d1_adc_pm_ops,
 
 static const struct of_device_id ma35d1_adc_of_match[] = {
 	{ .compatible = "nuvoton,ma35d1-eadc" },
-	{ .compatible = "nuvoton,ma35d0-eadc" },
-	{ .compatible = "nuvoton,ma35h0-eadc" },
 	{ }
 };
 MODULE_DEVICE_TABLE(of, ma35d1_adc_of_match);

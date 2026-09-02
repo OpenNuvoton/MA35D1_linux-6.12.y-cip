@@ -27,6 +27,10 @@ properties:
   clocks:
     maxItems: 1
 
+  clock-names:
+    items:
+      - const: eadc_gate
+
   '#address-cells':
     const: 1
 
