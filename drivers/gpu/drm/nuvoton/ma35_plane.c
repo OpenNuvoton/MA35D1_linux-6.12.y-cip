@@ -538,12 +538,17 @@ static void ma35_cursor_plane_atomic_async_update(struct drm_plane *drm_plane,
 }
 
 static void ma35_plane_atomic_disable(struct drm_plane *drm_plane,
-					 struct drm_atomic_state *state)
+				 struct drm_atomic_state *state)
 {
 	struct ma35_drm *priv = ma35_drm(drm_plane->dev);
 
-	regmap_update_bits(priv->regmap, MA35_FRAMEBUFFER_CONFIG,
-		MA35_PRIMARY_ENABLE, 0);
+	if (drm_plane->type == DRM_PLANE_TYPE_PRIMARY) {
+		regmap_update_bits(priv->regmap, MA35_FRAMEBUFFER_CONFIG,
+			MA35_PRIMARY_ENABLE, 0);
+	} else if (drm_plane->type == DRM_PLANE_TYPE_OVERLAY) {
+		regmap_update_bits(priv->regmap, MA35_OVERLAY_CONFIG,
+			MA35_OVERLAY_ENABLE, 0);
+	}
 }
 
 static void ma35_cursor_plane_atomic_disable(struct drm_plane *drm_plane,
