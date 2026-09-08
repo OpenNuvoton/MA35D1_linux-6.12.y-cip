@@ -113,18 +113,6 @@ properties:
               Functional role of this layer. Exactly one layer must be
               "primary". At most one layer may be "cursor".
 
-          HOTSPOT_X:
-            $ref: /schemas/types.yaml#/definitions/uint32
-            description:
-              Cursor hotspot X offset in pixels. Only valid when
-              layer-type is "cursor". Defaults to 0.
-
-          HOTSPOT_Y:
-            $ref: /schemas/types.yaml#/definitions/uint32
-            description:
-              Cursor hotspot Y offset in pixels. Only valid when
-              layer-type is "cursor". Defaults to 0.
-
         required:
           - reg
           - layer-id
@@ -183,8 +171,6 @@ examples:
                 reg = <2>;
                 layer-id = <2>;
                 layer-type = "cursor";
-                HOTSPOT_X = <0>;
-                HOTSPOT_Y = <0>;
             };
         };
 
