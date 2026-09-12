@@ -4,13 +4,13 @@
 $id: http://devicetree.org/schemas/spi/nuvoton,ma35d1-spi.yaml#
 $schema: http://devicetree.org/meta-schemas/core.yaml#
 
-title: Nuvoton MA35D1 SPI Controller
+title: Nuvoton MA35 Series SPI Controller
 
 maintainers:
   - Chi-Wen Weng <cwweng@nuvoton.com>
 
 description: |
-  The Nuvoton MA35D1 contains four SPI controllers. Each controller supports
+  The Nuvoton MA35D0, MA35D1, and MA35H0 SoCs contain SPI controllers. Each controller supports
   full-duplex transfers, two native chip-select signals, 8- to 32-bit words,
   programmable clock polarity and phase, and optional PDMA transfers.
 
@@ -48,15 +48,15 @@ properties:
 
   nuvoton,pdma-reqsel-tx:
     $ref: /schemas/types.yaml#/definitions/uint32
-    maximum: 255
+    enum: [60, 62, 64, 66]
     description:
-      MA35D1 PDMA request selector used for SPI transmit requests.
+      MA35 PDMA request selector used for SPI transmit requests.
 
   nuvoton,pdma-reqsel-rx:
     $ref: /schemas/types.yaml#/definitions/uint32
-    maximum: 255
+    enum: [61, 63, 65, 67]
     description:
-      MA35D1 PDMA request selector used for SPI receive requests.
+      MA35 PDMA request selector used for SPI receive requests.
 
   num-cs:
     const: 2
@@ -91,18 +91,19 @@ unevaluatedProperties: false
 examples:
   - |
     #include <dt-bindings/clock/nuvoton,ma35d1-clk.h>
+    #include <dt-bindings/dma/nuvoton,ma35-pdma.h>
     #include <dt-bindings/interrupt-controller/arm-gic.h>
 
     spi@40600000 {
         compatible = "nuvoton,ma35d1-spi";
-        reg = <0x0 0x40600000 0x0 0x10000>;
+        reg = <0x40600000 0x10000>;
         interrupts = <GIC_SPI 89 IRQ_TYPE_LEVEL_HIGH>;
         clocks = <&clk SPI0_GATE>;
 
         dmas = <&pdma1 4>, <&pdma1 5>;
         dma-names = "tx", "rx";
-        nuvoton,pdma-reqsel-tx = <60>;
-        nuvoton,pdma-reqsel-rx = <61>;
+        nuvoton,pdma-reqsel-tx = <MA35_PDMA_REQ_SPI0_TX>;
+        nuvoton,pdma-reqsel-rx = <MA35_PDMA_REQ_SPI0_RX>;
 
         num-cs = <2>;
         #address-cells = <1>;

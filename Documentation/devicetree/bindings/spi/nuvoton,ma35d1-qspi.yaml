@@ -34,29 +34,25 @@ properties:
   clocks:
     maxItems: 1
 
-  resets:
-    maxItems: 1
 
   dmas:
     minItems: 2
     maxItems: 2
 
   dma-names:
-    minItems: 2
-    maxItems: 2
     items:
-      - const: rx
       - const: tx
+      - const: rx
 
   nuvoton,pdma-reqsel-rx:
     $ref: /schemas/types.yaml#/definitions/uint32
-    maximum: 255
+    enum: [55, 57]
     description:
       PDMA request selector value used for QSPI receive transfers.
 
   nuvoton,pdma-reqsel-tx:
     $ref: /schemas/types.yaml#/definitions/uint32
-    maximum: 255
+    enum: [54, 56]
     description:
       PDMA request selector value used for QSPI transmit transfers.
 
@@ -80,7 +76,6 @@ required:
   - compatible
   - reg
   - clocks
-  - resets
 
 unevaluatedProperties: false
 
@@ -88,7 +83,7 @@ examples:
   - |
     #include <dt-bindings/interrupt-controller/arm-gic.h>
     #include <dt-bindings/clock/nuvoton,ma35d1-clk.h>
-    #include <dt-bindings/reset/nuvoton,ma35d1-reset.h>
+    #include <dt-bindings/dma/nuvoton,ma35-pdma.h>
 
     soc {
         #address-cells = <2>;
@@ -99,7 +94,10 @@ examples:
             reg = <0 0x40680000 0 0x100>;
             interrupts = <GIC_SPI 57 IRQ_TYPE_LEVEL_HIGH>;
             clocks = <&clk QSPI0_GATE>;
-            resets = <&sys MA35D1_RESET_QSPI0>;
+            dmas = <&pdma1 0>, <&pdma1 1>;
+            dma-names = "tx", "rx";
+            nuvoton,pdma-reqsel-tx = <MA35_PDMA_REQ_QSPI0_TX>;
+            nuvoton,pdma-reqsel-rx = <MA35_PDMA_REQ_QSPI0_RX>;
             #address-cells = <1>;
             #size-cells = <0>;
         };
