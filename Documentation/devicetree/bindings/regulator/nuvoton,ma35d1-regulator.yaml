@@ -15,7 +15,7 @@ description: |
   through a platform-specific secure monitor call interface.
 
 allOf:
-  - $ref: regulator/regulator.yaml#
+  - $ref: /schemas/regulator/regulator.yaml#
 
 properties:
   compatible:

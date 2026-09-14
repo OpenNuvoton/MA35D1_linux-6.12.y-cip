@@ -11,7 +11,7 @@ description: |
   in Nuvoton MA35D1, MA35H0, and MA35D0 SoCs.
 
 maintainers:
-  - Nuvoton Technology Corporation <www.nuvoton.com>
+  - Nuvoton Technology Corporation <cwweng@nuvoton.com>
 
 allOf:
   - $ref: serial.yaml#

@@ -7,7 +7,7 @@ $schema: http://devicetree.org/meta-schemas/core.yaml#
 title: Nuvoton MA35D1 Misc Control Driver
 
 maintainers:
-  - Nuvoton Technology Corporation <www.nuvoton.com>
+  - Nuvoton Technology Corporation <cwweng@nuvoton.com>
 
 description:
   Miscellaneous control interface for the Nuvoton MA35D1 SoC. The driver
