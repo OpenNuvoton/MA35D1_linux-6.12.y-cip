@@ -36,6 +36,7 @@
 #define MA35D1_EADC_CURDAT		0x4c
 #define MA35D1_EADC_CTL			0x50
 #define MA35D1_EADC_SWTRG		0x54
+#define MA35D1_EADC_OVSTS		0x5c
 #define MA35D1_EADC_SCTL(n)		(0x80 + (n) * 0x04)
 #define MA35D1_EADC_INTSRC0		0xd0
 #define MA35D1_EADC_STATUS2		0xf8
@@ -55,6 +56,7 @@
 
 #define MA35D1_EADC_DAT_MASK		GENMASK(11, 0)
 #define MA35D1_EADC_STATUS2_ADIF0	BIT(0)
+#define MA35D1_EADC_STATUS2_ADOVIF0	BIT(8)
 #define MA35D1_EADC_INTSRC0_ADINT0	BIT(0)
 
 #define MA35D1_EADC_PDMACTL_PDMABUSY	BIT(31)
@@ -102,6 +104,7 @@ struct ma35d1_adc {
 	void __iomem *regs;
 	struct clk *clk;
 	struct completion completion;
+	unsigned int irq;
 
 	/* Protects direct conversions against concurrent register access. */
 	struct mutex lock;
@@ -239,8 +242,17 @@ static irqreturn_t ma35d1_adc_isr(int irq, void *data)
 	if (!(status & MA35D1_EADC_STATUS2_ADIF0))
 		return IRQ_NONE;
 
+	/*
+	 * Clear ADIF0 together with ADOVIF0 (bit8, "ADIF0 was overwritten
+	 * before being cleared"), and any latched Start-of-Conversion
+	 * overrun (SPOVF) in OVSTS. Both are W1C; left uncleared, a
+	 * transient overrun would latch permanently.
+	 */
 	ma35d1_adc_write(adc, MA35D1_EADC_STATUS2,
-			 MA35D1_EADC_STATUS2_ADIF0);
+			 MA35D1_EADC_STATUS2_ADIF0 |
+			 MA35D1_EADC_STATUS2_ADOVIF0);
+	ma35d1_adc_write(adc, MA35D1_EADC_OVSTS,
+			 ma35d1_adc_read(adc, MA35D1_EADC_OVSTS));
 
 	if (iio_buffer_enabled(indio_dev)) {
 		/*
@@ -278,7 +290,14 @@ static irqreturn_t ma35d1_adc_trigger_handler(int irq, void *p)
 	ma35d1_adc_rmw(adc, MA35D1_EADC_CTL,
 		       MA35D1_EADC_CTL_ADCIEN0,
 		       MA35D1_EADC_CTL_ADCIEN0);
-	ma35d1_adc_write(adc, MA35D1_EADC_SWTRG, 1);
+
+	/*
+	 * Do not re-assert SWTRG here: all active sample modules are
+	 * configured with TRGSEL=ADINT0TRG, so module 0's own EOC already
+	 * auto-chains and re-triggers modules 0..scan_chancnt-1 every
+	 * cycle. Manually re-triggering module 0 here races that auto-chain
+	 * and causes a Start-of-Conversion overrun (SPOVF).
+	 */
 
 	return IRQ_HANDLED;
 }
@@ -610,6 +629,22 @@ static int ma35d1_adc_buffer_predisable(struct iio_dev *indio_dev)
 		ma35d1_adc_dma_stop(adc);
 
 	ma35d1_adc_disable_irq(adc);
+
+	/*
+	 * Disabling ADCIEN0 above only stops the EADC from generating
+	 * *future* interrupts; it does not retract one that is already
+	 * latched/in-flight on another CPU. Right after this callback
+	 * returns, the IIO core calls free_irq() on the trigger's subirq,
+	 * destroying the kernel thread that runs
+	 * ma35d1_adc_trigger_handler(). If ma35d1_adc_isr() is still
+	 * running at that moment, it can call iio_trigger_poll()
+	 * concurrently with that free_irq(), permanently losing the EOC
+	 * notification since the thread that would handle it is already
+	 * gone. synchronize_irq() blocks until any in-flight ISR instance
+	 * has returned and guarantees none can start afterwards, closing
+	 * this race before the IIO core proceeds to free_irq().
+	 */
+	synchronize_irq(adc->irq);
 
 	for (i = 0; i < adc->scan_chancnt; i++)
 		ma35d1_adc_rmw(adc, MA35D1_EADC_SCTL(i),
@@ -952,6 +987,8 @@ static int ma35d1_adc_probe(struct platform_device *pdev)
 	irq = platform_get_irq(pdev, 0);
 	if (irq < 0)
 		return irq;
+
+	adc->irq = irq;
 
 	ret = devm_request_irq(dev, irq, ma35d1_adc_isr, 0,
 			       dev_name(dev), indio_dev);
