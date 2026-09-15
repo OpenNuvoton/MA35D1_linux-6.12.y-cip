@@ -558,10 +558,8 @@ static int ma35d1_i2s_probe(struct platform_device *pdev)
 
 static const struct of_device_id ma35d1_i2s_of_match[] = {
 	{ .compatible = "nuvoton,ma35d0-i2s" },
-	{ .compatible = "nuvoton,ma35d0-audio-i2s" },
 	{ .compatible = "nuvoton,ma35d1-i2s" },
 	{ .compatible = "nuvoton,ma35h0-i2s" },
-	{ .compatible = "nuvoton,ma35h0-audio-i2s" },
 	{ }
 };
 MODULE_DEVICE_TABLE(of, ma35d1_i2s_of_match);
