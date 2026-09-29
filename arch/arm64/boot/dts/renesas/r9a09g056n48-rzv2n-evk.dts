@@ -26,6 +26,7 @@
 		i2c7 = &i2c7;
 		i2c8 = &i2c8;
 		mmc1 = &sdhi1;
+		rtc0 = &rtc;
 		serial0 = &scif;
 	};
 
@@ -452,6 +453,10 @@
 
 &qextal_clk {
 	clock-frequency = <24000000>;
+};
+
+&rtc {
+	status = "okay";
 };
 
 &rtxin_clk {
