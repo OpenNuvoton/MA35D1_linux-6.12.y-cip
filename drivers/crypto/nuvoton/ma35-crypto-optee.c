@@ -23,10 +23,10 @@
 #include <linux/mutex.h>
 #include <crypto/algapi.h>
 
-#include "ma35d1-crypto.h"
-#include "ma35d1-crypto-optee.h"
+#include "ma35-crypto.h"
+#include "ma35-crypto-optee.h"
 
-bool ma35d1_crypto_optee_faulted;
+bool ma35_crypto_optee_faulted;
 
 static DEFINE_MUTEX(optee_register_lock);
 static DEFINE_MUTEX(optee_ready_lock);
@@ -120,19 +120,19 @@ MODULE_DEVICE_TABLE(tee, optee_crypto_id_table);
 static struct tee_client_driver optee_crypto_driver = {
 	.id_table	= optee_crypto_id_table,
 	.driver		= {
-		.name		= "optee-ma35d1-crypto",
+		.name		= "optee-ma35-crypto",
 		.bus		= &tee_bus_type,
 		.probe		= optee_crypto_probe,
 		.remove		= optee_crypto_remove,
 	},
 };
 
-int ma35d1_crypto_optee_init(struct nu_crypto_dev *crypto_dev)
+int ma35_crypto_optee_init(struct nu_crypto_dev *crypto_dev)
 {
 	struct tee_client_device *tee_cdev;
 	int err = 0;
 
-	if (READ_ONCE(ma35d1_crypto_optee_faulted))
+	if (READ_ONCE(ma35_crypto_optee_faulted))
 		return -EIO;
 	if (crypto_dev->tee_cdev != NULL)
 		return 0; /* already inited */
@@ -164,7 +164,7 @@ int ma35d1_crypto_optee_init(struct nu_crypto_dev *crypto_dev)
 	return 0;
 }
 
-static int ma35d1_crypto_optee_probe(struct platform_device *pdev)
+static int ma35_crypto_optee_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	struct nu_crypto_dev *crypto_dev;
@@ -177,33 +177,33 @@ static int ma35d1_crypto_optee_probe(struct platform_device *pdev)
 	dev_set_drvdata(dev, crypto_dev);
 	crypto_dev->dev = dev;
 
-	err = ma35d1_crypto_optee_init(crypto_dev);
+	err = ma35_crypto_optee_init(crypto_dev);
 	if (err)
 		return err;
 
 	crypto_dev->ecc_ioctl = true;
 	crypto_dev->rsa_ioctl = true;
 
-	err = ma35d1_aes_optee_probe(dev, crypto_dev);
+	err = ma35_aes_optee_probe(dev, crypto_dev);
 	if (err)
-		dev_err(dev, "failed to init ma35d1-aes-optee!\n");
+		dev_err(dev, "failed to init ma35-aes-optee!\n");
 
-	err = ma35d1_sha_optee_probe(dev, crypto_dev);
+	err = ma35_sha_optee_probe(dev, crypto_dev);
 	if (err)
-		dev_err(dev, "failed to init ma35d1-sha-optee!\n");
+		dev_err(dev, "failed to init ma35-sha-optee!\n");
 
-	err = ma35d1_ecc_optee_probe(dev, crypto_dev);
+	err = ma35_ecc_optee_probe(dev, crypto_dev);
 	if (err)
-		dev_err(dev, "failed to init ma35d1-ecc-optee!\n");
+		dev_err(dev, "failed to init ma35-ecc-optee!\n");
 
-	err = ma35d1_rsa_optee_probe(dev, crypto_dev);
+	err = ma35_rsa_optee_probe(dev, crypto_dev);
 	if (err)
-		dev_err(dev, "failed to init ma35d1-rsa-optee!\n");
+		dev_err(dev, "failed to init ma35-rsa-optee!\n");
 
 	return 0;
 }
 
-static void ma35d1_crypto_optee_remove(struct platform_device *pdev)
+static void ma35_crypto_optee_remove(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	struct nu_crypto_dev *crypto_dev;
@@ -212,46 +212,46 @@ static void ma35d1_crypto_optee_remove(struct platform_device *pdev)
 	if (!crypto_dev)
 		return;
 
-	ma35d1_aes_optee_remove(&pdev->dev, crypto_dev);
-	ma35d1_sha_optee_remove(&pdev->dev, crypto_dev);
-	ma35d1_ecc_optee_remove(&pdev->dev, crypto_dev);
-	ma35d1_rsa_optee_remove(&pdev->dev, crypto_dev);
+	ma35_aes_optee_remove(&pdev->dev, crypto_dev);
+	ma35_sha_optee_remove(&pdev->dev, crypto_dev);
+	ma35_ecc_optee_remove(&pdev->dev, crypto_dev);
+	ma35_rsa_optee_remove(&pdev->dev, crypto_dev);
 	put_device(&crypto_dev->tee_cdev->dev);
 	crypto_dev->tee_cdev = NULL;
 }
 
-static const struct of_device_id ma35d1_crypto_optee_of_match[] = {
+static const struct of_device_id ma35_crypto_optee_of_match[] = {
 	{ .compatible = "nuvoton,ma35d1-crypto-optee" },
 	{ .compatible = "nuvoton,ma35d0-crypto-optee" },
 	{ .compatible = "nuvoton,ma35h0-crypto-optee" },
 	{},
 };
-MODULE_DEVICE_TABLE(of, ma35d1_crypto_optee_of_match);
+MODULE_DEVICE_TABLE(of, ma35_crypto_optee_of_match);
 
-static struct platform_driver ma35d1_crypto_optee_driver = {
-	.probe  = ma35d1_crypto_optee_probe,
-	.remove = ma35d1_crypto_optee_remove,
+static struct platform_driver ma35_crypto_optee_driver = {
+	.probe  = ma35_crypto_optee_probe,
+	.remove = ma35_crypto_optee_remove,
 	.driver = {
-		.name = "ma35d1-crypto-optee",
+		.name = "ma35-crypto-optee",
 		.owner = THIS_MODULE,
-		.of_match_table = ma35d1_crypto_optee_of_match,
+		.of_match_table = ma35_crypto_optee_of_match,
 	},
 };
 
-static int __init ma35d1_crypto_platform_driver_init(void)
+static int __init ma35_crypto_platform_driver_init(void)
 {
-	return platform_driver_register(&ma35d1_crypto_optee_driver);
+	return platform_driver_register(&ma35_crypto_optee_driver);
 }
 
-static void __exit ma35d1_crypto_platform_driver_exit(void)
+static void __exit ma35_crypto_platform_driver_exit(void)
 {
-	platform_driver_unregister(&ma35d1_crypto_optee_driver);
+	platform_driver_unregister(&ma35_crypto_optee_driver);
 	if (optee_driver_registered)
 		driver_unregister(&optee_crypto_driver.driver);
 }
 
-late_initcall(ma35d1_crypto_platform_driver_init);
-module_exit(ma35d1_crypto_platform_driver_exit);
+late_initcall(ma35_crypto_platform_driver_init);
+module_exit(ma35_crypto_platform_driver_exit);
 
 MODULE_AUTHOR("Nuvoton Technology Corporation");
 MODULE_DESCRIPTION("Nuvoton Cryptographic Accelerator OP-TEE");

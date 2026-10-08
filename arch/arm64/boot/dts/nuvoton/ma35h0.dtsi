@@ -309,7 +309,7 @@
 		interrupts = <GIC_SPI 39 IRQ_TYPE_LEVEL_HIGH>;
 		rsa_ioctl = "no";           /* yes: RSA via ioctl, no: RSA via akcipher   */
 		ecc_ioctl = "no";           /* yes: ECC via ioctl, no: ECDH via akcipher */
-		status = "okay";
+		status = "disabled";
 	};
 
 	/* Key Store */

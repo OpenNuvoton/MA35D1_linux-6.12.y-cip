@@ -20,27 +20,27 @@
 #include <linux/of.h>
 #include <linux/slab.h>
 
-#include "ma35d1-crypto.h"
+#include "ma35-crypto.h"
 
 #define PRNG_TIMEOUT     100
 
-struct ma35d1_prng {
+struct ma35_prng {
 	struct device	*dev;
 	void __iomem	*reg_base;
 	struct hwrng	rng;
 };
 
-static inline void nu_write_reg(struct ma35d1_prng *prng, u32 val, u32 reg)
+static inline void nu_write_reg(struct ma35_prng *prng, u32 val, u32 reg)
 {
 	writel_relaxed(val, prng->reg_base + reg);
 }
 
-static inline u32 nu_read_reg(struct ma35d1_prng *prng, u32 reg)
+static inline u32 nu_read_reg(struct ma35_prng *prng, u32 reg)
 {
 	return readl_relaxed(prng->reg_base + reg);
 }
 
-static inline int ma35d1_prng_wait_busy_clear(struct ma35d1_prng *prng)
+static inline int ma35_prng_wait_busy_clear(struct ma35_prng *prng)
 {
 	unsigned long t_out = jiffies + msecs_to_jiffies(PRNG_TIMEOUT);
 
@@ -51,9 +51,9 @@ static inline int ma35d1_prng_wait_busy_clear(struct ma35d1_prng *prng)
 	return 0;
 }
 
-static int ma35d1_prng_init(struct hwrng *rng)
+static int ma35_prng_init(struct hwrng *rng)
 {
-	struct ma35d1_prng *prng = (struct ma35d1_prng *)rng->priv;
+	struct ma35_prng *prng = (struct ma35_prng *)rng->priv;
 
 	// dump_trng_reg(prng);
 
@@ -61,25 +61,25 @@ static int ma35d1_prng_init(struct hwrng *rng)
 
 	nu_write_reg(prng, PRNG_CTL_SEEDRLD | PRNG_CTL_START, PRNG_CTL);
 
-	return ma35d1_prng_wait_busy_clear(prng);
+	return ma35_prng_wait_busy_clear(prng);
 }
 
-static int ma35d1_prng_read(struct hwrng *rng, void *buf, size_t max, bool wait)
+static int ma35_prng_read(struct hwrng *rng, void *buf, size_t max, bool wait)
 {
-	struct ma35d1_prng *prng = (struct ma35d1_prng *)rng->priv;
+	struct ma35_prng *prng = (struct ma35_prng *)rng->priv;
 	u32 *data = buf;
 	int i, err, retval;
 
 	retval = 0;
 
 	while (max >= 4) {
-		err = ma35d1_prng_wait_busy_clear(prng);
+		err = ma35_prng_wait_busy_clear(prng);
 		if (err != 0)
 			return err;
 
 		nu_write_reg(prng, PRNG_CTL_START, PRNG_CTL);
 
-		err = ma35d1_prng_wait_busy_clear(prng);
+		err = ma35_prng_wait_busy_clear(prng);
 		if (err != 0)
 			return err;
 
@@ -96,9 +96,9 @@ static int ma35d1_prng_read(struct hwrng *rng, void *buf, size_t max, bool wait)
 	return retval;
 }
 
-int ma35d1_prng_probe(struct device *dev, void __iomem *reg_base, unsigned long *data)
+int ma35_prng_probe(struct device *dev, void __iomem *reg_base, unsigned long *data)
 {
-	struct ma35d1_prng *prng;
+	struct ma35_prng *prng;
 	int err;
 
 	prng = devm_kzalloc(dev, sizeof(*prng), GFP_KERNEL);
@@ -109,8 +109,8 @@ int ma35d1_prng_probe(struct device *dev, void __iomem *reg_base, unsigned long 
 	prng->reg_base = reg_base;
 
 	prng->rng.name = "nuvoton-prng";
-	prng->rng.init = ma35d1_prng_init;
-	prng->rng.read = ma35d1_prng_read;
+	prng->rng.init = ma35_prng_init;
+	prng->rng.read = ma35_prng_read;
 	prng->rng.priv = (unsigned long)prng;
 
 	*data = (unsigned long)prng;
@@ -119,11 +119,11 @@ int ma35d1_prng_probe(struct device *dev, void __iomem *reg_base, unsigned long 
 	if (err)
 		return err;
 
-	pr_info("ma35d1 crypto prng initialized.\n");
+	pr_info("ma35 crypto prng initialized.\n");
 	return 0;
 }
 
-int ma35d1_prng_remove(struct device *dev, unsigned long data)
+int ma35_prng_remove(struct device *dev, unsigned long data)
 {
 	devm_kfree(dev, (void *)data);
 	return 0;

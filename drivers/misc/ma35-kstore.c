@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
- * Nuvoton MA35D1 series key store driver
+ * Nuvoton MA35 series key store driver
  *
- * Copyright (c) 2026 Nuvoton technology corporation.
+ * Copyright (c) 2025 Nuvoton technology corporation.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -15,22 +15,22 @@
 #include <linux/interrupt.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
+#include <linux/platform_device.h>
 #include <linux/clk.h>
 #include <linux/of_platform.h>
-#include <linux/platform_device.h>
 #include <linux/poll.h>
 #include <linux/slab.h>
 #include <linux/clk.h>
 #include <linux/compat.h>
 #include <linux/highmem.h>
 
-#include <uapi/misc/ma35d1_kstore.h>
+#include <uapi/misc/ma35_kstore.h>
 
 #define MISCDEV_NAME		"ksdev"
 
 #define KS_BUSY_TIMEOUT		1000
 
-struct ma35d1_ks_dev {
+struct ma35_ks_dev {
 	struct device *dev;
 	struct miscdevice miscdev;
 	wait_queue_head_t waitq;
@@ -45,7 +45,7 @@ static uint16_t au8SRAMCntTbl[21] = {4, 6, 6, 7, 8, 8, 8, 9, 12, 13, 16, 17,
 				     18, 0, 0, 0, 32, 48, 64, 96, 128};
 static uint16_t au8OTPCntTbl[7] = {4, 6, 6, 7, 8, 8, 8};
 
-static inline u32  ma35d1_read_reg(struct ma35d1_ks_dev *ks_dev, u32 offset)
+static inline u32  ma35_read_reg(struct ma35_ks_dev *ks_dev, u32 offset)
 {
 	u32 value = readl_relaxed(ks_dev->reg_base + offset);
 
@@ -53,17 +53,17 @@ static inline u32  ma35d1_read_reg(struct ma35d1_ks_dev *ks_dev, u32 offset)
 	return value;
 }
 
-static inline void ma35d1_write_reg(struct ma35d1_ks_dev *ks_dev, u32 offset, u32 value)
+static inline void ma35_write_reg(struct ma35_ks_dev *ks_dev, u32 offset, u32 value)
 {
 	dev_vdbg(ks_dev->dev, "write 0x%08x into <0x%x>\n", value, offset);
 	writel_relaxed(value, ks_dev->reg_base + offset);
 }
 
-static inline int ma35d1_ks_wait_busy_clear(struct ma35d1_ks_dev *ks_dev)
+static inline int ma35_ks_wait_busy_clear(struct ma35_ks_dev *ks_dev)
 {
 	unsigned long timeout = jiffies + msecs_to_jiffies(KS_BUSY_TIMEOUT);
 
-	while (ma35d1_read_reg(ks_dev, KS_STS) & KS_STS_BUSY) {
+	while (ma35_read_reg(ks_dev, KS_STS) & KS_STS_BUSY) {
 		if (time_after(jiffies, timeout)) {
 			pr_err("MA35 KeyStore is busy!\n");
 			return -EBUSY;
@@ -72,7 +72,7 @@ static inline int ma35d1_ks_wait_busy_clear(struct ma35d1_ks_dev *ks_dev)
 	return 0;
 }
 
-static int ma35d1_ks_read(struct ma35d1_ks_dev *ks_dev, void __user *arg)
+static int ma35_ks_read(struct ma35_ks_dev *ks_dev, void __user *arg)
 {
 	struct ks_read_args r_args;
 	int err, remain_cnt;
@@ -84,29 +84,29 @@ static int ma35d1_ks_read(struct ma35d1_ks_dev *ks_dev, void __user *arg)
 		return -EFAULT;
 
 	/* Just return when key store is in busy */
-	if (ma35d1_ks_wait_busy_clear(ks_dev) != 0)
+	if (ma35_ks_wait_busy_clear(ks_dev) != 0)
 		return -EBUSY;
 
 	/* Specify the key address */
-	ma35d1_write_reg(ks_dev, KS_METADATA, (r_args.type <<
-			 KS_METADATA_DST_Pos) | KS_TOMETAKEY(r_args.key_idx));
+	ma35_write_reg(ks_dev, KS_METADATA, (r_args.type <<
+			KS_METADATA_DST_Pos) | KS_TOMETAKEY(r_args.key_idx));
 
 	/* Clear error flag */
-	ma35d1_write_reg(ks_dev, KS_STS, KS_STS_EIF);
+	ma35_write_reg(ks_dev, KS_STS, KS_STS_EIF);
 	offset = 0;
 	cont_msk = 0;
 	remain_cnt = r_args.word_cnt;
 
 	do {
 		/* Clear Status */
-		ma35d1_write_reg(ks_dev, KS_STS, KS_STS_EIF | KS_STS_IF);
+		ma35_write_reg(ks_dev, KS_STS, KS_STS_EIF | KS_STS_IF);
 
 		/* Trigger to read the key */
-		ma35d1_write_reg(ks_dev, KS_CTL, cont_msk | KS_OP_READ | KS_CTL_START |
-				(ma35d1_read_reg(ks_dev, KS_CTL) & KS_CLT_FUNC_MASK));
+		ma35_write_reg(ks_dev, KS_CTL, cont_msk | KS_OP_READ | KS_CTL_START |
+				(ma35_read_reg(ks_dev, KS_CTL) & KS_CLT_FUNC_MASK));
 
 		/* Waiting for key store processing */
-		if (ma35d1_ks_wait_busy_clear(ks_dev) != 0)
+		if (ma35_ks_wait_busy_clear(ks_dev) != 0)
 			return -EBUSY;
 
 		/* Read the key to key buffer */
@@ -114,7 +114,7 @@ static int ma35d1_ks_read(struct ma35d1_ks_dev *ks_dev, void __user *arg)
 		if (cnt > 8)
 			cnt = 8;
 		for (i = 0; i < cnt; i++)
-			r_args.key[offset+i] = ma35d1_read_reg(ks_dev, KS_KEY(i));
+			r_args.key[offset+i] = ma35_read_reg(ks_dev, KS_KEY(i));
 
 		cont_msk = KS_CTL_CONT;
 		remain_cnt -= 8;
@@ -123,7 +123,7 @@ static int ma35d1_ks_read(struct ma35d1_ks_dev *ks_dev, void __user *arg)
 	} while (remain_cnt > 0);
 
 	/* Check error flag */
-	if (ma35d1_read_reg(ks_dev, KS_STS) & KS_STS_EIF) {
+	if (ma35_read_reg(ks_dev, KS_STS) & KS_STS_EIF) {
 		pr_err("KS EIF set on reading keys!\n");
 		return -EIO;
 	}
@@ -135,7 +135,7 @@ static int ma35d1_ks_read(struct ma35d1_ks_dev *ks_dev, void __user *arg)
 	return err;
 }
 
-static int ma35d1_ks_write_sram(struct ma35d1_ks_dev *ks_dev, void __user *arg)
+static int ma35_ks_write_sram(struct ma35_ks_dev *ks_dev, void __user *arg)
 {
 	struct ks_write_args w_args;
 	int err, remain_cnt;
@@ -147,12 +147,12 @@ static int ma35d1_ks_write_sram(struct ma35d1_ks_dev *ks_dev, void __user *arg)
 		return -EFAULT;
 
 	/* Just return when key store is in busy */
-	if (ma35d1_ks_wait_busy_clear(ks_dev) != 0)
+	if (ma35_ks_wait_busy_clear(ks_dev) != 0)
 		return -EBUSY;
 
 	/* Specify the key address */
-	ma35d1_write_reg(ks_dev, KS_METADATA,
-			 (KS_SRAM << KS_METADATA_DST_Pos) | w_args.meta_data);
+	ma35_write_reg(ks_dev, KS_METADATA,
+		       (KS_SRAM << KS_METADATA_DST_Pos) | w_args.meta_data);
 
 	/* Get key size by indexing to size table */
 	i = ((w_args.meta_data & KS_METADATA_SIZE_Msk) >> KS_METADATA_SIZE_Pos);
@@ -165,7 +165,7 @@ static int ma35d1_ks_write_sram(struct ma35d1_ks_dev *ks_dev, void __user *arg)
 	}
 
 	/* Clear error flag */
-	ma35d1_write_reg(ks_dev, KS_STS, KS_STS_EIF);
+	ma35_write_reg(ks_dev, KS_STS, KS_STS_EIF);
 	offset = 0;
 	cont_msk = 0;
 	do {
@@ -173,36 +173,37 @@ static int ma35d1_ks_write_sram(struct ma35d1_ks_dev *ks_dev, void __user *arg)
 		cnt = remain_cnt;
 		if (cnt > 8)
 			cnt = 8;
-		for (i = 0; i < cnt; i++)
-			ma35d1_write_reg(ks_dev, KS_KEY(i), w_args.key[offset + i]);
+		for (i = 0; i < cnt; i++) {
+			ma35_write_reg(ks_dev, KS_KEY(i), w_args.key[offset + i]);
+		}
 
 		/* Clear Status */
-		ma35d1_write_reg(ks_dev, KS_STS, KS_STS_EIF | KS_STS_IF);
+		ma35_write_reg(ks_dev, KS_STS, KS_STS_EIF | KS_STS_IF);
 
 		/* Write the key */
-		ma35d1_write_reg(ks_dev, KS_CTL, cont_msk | KS_OP_WRITE | KS_CTL_START |
-				 (ma35d1_read_reg(ks_dev, KS_CTL) & KS_CLT_FUNC_MASK));
+		ma35_write_reg(ks_dev, KS_CTL,	cont_msk | KS_OP_WRITE | KS_CTL_START |
+			       (ma35_read_reg(ks_dev, KS_CTL) & KS_CLT_FUNC_MASK));
 
 		cont_msk = KS_CTL_CONT;
 		remain_cnt -= 8;
 		offset += 8;
 
 		/* Waiting for key store processing */
-		if (ma35d1_ks_wait_busy_clear(ks_dev) != 0)
+		if (ma35_ks_wait_busy_clear(ks_dev) != 0)
 			return -EBUSY;
 
 	} while (remain_cnt > 0);
 
 	/* Check error flag */
-	if (ma35d1_read_reg(ks_dev, KS_STS) & KS_STS_EIF) {
+	if (ma35_read_reg(ks_dev, KS_STS) & KS_STS_EIF) {
 		pr_err("KS EIF set on writing SRAM keys!\n");
 		return -EIO;
 	}
 
-	return KS_TOKEYIDX(ma35d1_read_reg(ks_dev, KS_METADATA));
+	return KS_TOKEYIDX(ma35_read_reg(ks_dev, KS_METADATA));
 }
 
-static int ma35d1_ks_write_otp(struct ma35d1_ks_dev *ks_dev, void __user *arg)
+static int ma35_ks_write_otp(struct ma35_ks_dev *ks_dev, void __user *arg)
 {
 	struct ks_write_args w_args;
 	int err, remain_cnt;
@@ -214,12 +215,12 @@ static int ma35d1_ks_write_otp(struct ma35d1_ks_dev *ks_dev, void __user *arg)
 		return -EFAULT;
 
 	/* Just return when key store is in busy */
-	if (ma35d1_ks_wait_busy_clear(ks_dev) != 0)
+	if (ma35_ks_wait_busy_clear(ks_dev) != 0)
 		return -EBUSY;
 
 	/* Specify the key address */
-	ma35d1_write_reg(ks_dev, KS_METADATA, (KS_OTP << KS_METADATA_DST_Pos) |
-			 w_args.meta_data | KS_TOMETAKEY(w_args.key_idx));
+	ma35_write_reg(ks_dev, KS_METADATA, (KS_OTP << KS_METADATA_DST_Pos) |
+			w_args.meta_data | KS_TOMETAKEY(w_args.key_idx));
 
 	/* Get size index */
 	sidx = ((w_args.meta_data & KS_METADATA_SIZE_Msk) >> KS_METADATA_SIZE_Pos);
@@ -231,7 +232,7 @@ static int ma35d1_ks_write_otp(struct ma35d1_ks_dev *ks_dev, void __user *arg)
 	remain_cnt = au8OTPCntTbl[sidx];
 
 	/* Clear error flag */
-	ma35d1_write_reg(ks_dev, KS_STS, KS_STS_EIF);
+	ma35_write_reg(ks_dev, KS_STS, KS_STS_EIF);
 	offset = 0;
 	cont_msk = 0;
 	do  {
@@ -240,34 +241,34 @@ static int ma35d1_ks_write_otp(struct ma35d1_ks_dev *ks_dev, void __user *arg)
 		if (cnt > 8)
 			cnt = 8;
 		for (i = 0; i < cnt; i++)
-			ma35d1_write_reg(ks_dev, KS_KEY(i), w_args.key[offset + i]);
+			ma35_write_reg(ks_dev, KS_KEY(i), w_args.key[offset + i]);
 
 		/* Clear Status */
-		ma35d1_write_reg(ks_dev, KS_STS, KS_STS_EIF | KS_STS_IF);
+		ma35_write_reg(ks_dev, KS_STS, KS_STS_EIF | KS_STS_IF);
 
 		/* Write the key */
-		ma35d1_write_reg(ks_dev, KS_CTL, cont_msk | KS_OP_WRITE | KS_CTL_START |
-				 (ma35d1_read_reg(ks_dev, KS_CTL) & KS_CLT_FUNC_MASK));
+		ma35_write_reg(ks_dev, KS_CTL,	cont_msk | KS_OP_WRITE | KS_CTL_START |
+			       (ma35_read_reg(ks_dev, KS_CTL) & KS_CLT_FUNC_MASK));
 
 		cont_msk = KS_CTL_CONT;
 		remain_cnt -= 8;
 		offset += 8;
 
 		/* Waiting for key store processing */
-		if (ma35d1_ks_wait_busy_clear(ks_dev) != 0)
+		if (ma35_ks_wait_busy_clear(ks_dev) != 0)
 			return -EBUSY;
 
 	} while (remain_cnt > 0);
 
 	/* Check error flag */
-	if (ma35d1_read_reg(ks_dev, KS_STS) & KS_STS_EIF) {
+	if (ma35_read_reg(ks_dev, KS_STS) & KS_STS_EIF) {
 		pr_err("KS EIF set on writing OTP keys!\n");
 		return -EIO;
 	}
 	return 0;
 }
 
-static int ma35d1_ks_erase(struct ma35d1_ks_dev *ks_dev, void __user *arg)
+static int ma35_ks_erase(struct ma35_ks_dev *ks_dev, void __user *arg)
 {
 	struct ks_kidx_args k_args;
 	int err;
@@ -277,61 +278,61 @@ static int ma35d1_ks_erase(struct ma35d1_ks_dev *ks_dev, void __user *arg)
 		return -EFAULT;
 
 	/* Just return when key store is in busy */
-	if (ma35d1_ks_wait_busy_clear(ks_dev) != 0)
+	if (ma35_ks_wait_busy_clear(ks_dev) != 0)
 		return -EBUSY;
 
 	/* Specify the key address */
-	ma35d1_write_reg(ks_dev, KS_METADATA,
-			 (k_args.type << KS_METADATA_DST_Pos) | KS_TOMETAKEY(k_args.key_idx));
+	ma35_write_reg(ks_dev, KS_METADATA,
+		       (k_args.type << KS_METADATA_DST_Pos) | KS_TOMETAKEY(k_args.key_idx));
 
 	/* Clear Status */
-	ma35d1_write_reg(ks_dev, KS_STS, KS_STS_EIF | KS_STS_IF);
+	ma35_write_reg(ks_dev, KS_STS, KS_STS_EIF | KS_STS_IF);
 
 	/* Erase the key */
-	ma35d1_write_reg(ks_dev, KS_CTL, KS_OP_ERASE | KS_CTL_START |
-			 (ma35d1_read_reg(ks_dev, KS_CTL) & KS_CLT_FUNC_MASK));
+	ma35_write_reg(ks_dev, KS_CTL, KS_OP_ERASE | KS_CTL_START |
+		       (ma35_read_reg(ks_dev, KS_CTL) & KS_CLT_FUNC_MASK));
 
 	/* Waiting for processing */
-	if (ma35d1_ks_wait_busy_clear(ks_dev) != 0)
+	if (ma35_ks_wait_busy_clear(ks_dev) != 0)
 		return -EBUSY;
 
 	/* Check error flag */
-	if (ma35d1_read_reg(ks_dev, KS_STS) & KS_STS_EIF) {
+	if (ma35_read_reg(ks_dev, KS_STS) & KS_STS_EIF) {
 		pr_err("KS EIF set on erasing a key!\n");
 		return -EIO;
 	}
 	return 0;
 }
 
-static int ma35d1_ks_erase_all(struct ma35d1_ks_dev *ks_dev)
+static int ma35_ks_erase_all(struct ma35_ks_dev *ks_dev)
 {
 	/* Just return when key store is in busy */
-	if (ma35d1_ks_wait_busy_clear(ks_dev) != 0)
+	if (ma35_ks_wait_busy_clear(ks_dev) != 0)
 		return -EBUSY;
 
 	/* Specify the key address */
-	ma35d1_write_reg(ks_dev, KS_METADATA, (KS_SRAM << KS_METADATA_DST_Pos));
+	ma35_write_reg(ks_dev, KS_METADATA, (KS_SRAM << KS_METADATA_DST_Pos));
 
 	/* Clear Status */
-	ma35d1_write_reg(ks_dev, KS_STS, KS_STS_EIF | KS_STS_IF);
+	ma35_write_reg(ks_dev, KS_STS, KS_STS_EIF | KS_STS_IF);
 
 	/* Erase the key */
-	ma35d1_write_reg(ks_dev, KS_CTL, KS_OP_ERASE_ALL | KS_CTL_START |
-			 (ma35d1_read_reg(ks_dev, KS_CTL) & KS_CLT_FUNC_MASK));
+	ma35_write_reg(ks_dev, KS_CTL, KS_OP_ERASE_ALL | KS_CTL_START |
+		       (ma35_read_reg(ks_dev, KS_CTL) & KS_CLT_FUNC_MASK));
 
 	/* Waiting for processing */
-	if (ma35d1_ks_wait_busy_clear(ks_dev) != 0)
+	if (ma35_ks_wait_busy_clear(ks_dev) != 0)
 		return -EBUSY;
 
 	/* Check error flag */
-	if (ma35d1_read_reg(ks_dev, KS_STS) & KS_STS_EIF) {
+	if (ma35_read_reg(ks_dev, KS_STS) & KS_STS_EIF) {
 		pr_err("KS EIF set on erase-all!\n");
 		return -EIO;
 	}
 	return 0;
 }
 
-static int ma35d1_ks_revoke(struct ma35d1_ks_dev *ks_dev, void __user *arg)
+static int ma35_ks_revoke(struct ma35_ks_dev *ks_dev, void __user *arg)
 {
 	struct ks_kidx_args k_args;
 	int err;
@@ -341,37 +342,37 @@ static int ma35d1_ks_revoke(struct ma35d1_ks_dev *ks_dev, void __user *arg)
 		return -EFAULT;
 
 	/* Just return when key store is in busy */
-	if (ma35d1_ks_wait_busy_clear(ks_dev) != 0)
+	if (ma35_ks_wait_busy_clear(ks_dev) != 0)
 		return -EBUSY;
 
 	/* Specify the key address */
-	ma35d1_write_reg(ks_dev, KS_METADATA, (k_args.type <<
-			 KS_METADATA_DST_Pos) | KS_TOMETAKEY(k_args.key_idx));
+	ma35_write_reg(ks_dev, KS_METADATA, (k_args.type <<
+		       KS_METADATA_DST_Pos) | KS_TOMETAKEY(k_args.key_idx));
 
 	/* Clear Status */
-	ma35d1_write_reg(ks_dev, KS_STS, KS_STS_EIF | KS_STS_IF);
+	ma35_write_reg(ks_dev, KS_STS, KS_STS_EIF | KS_STS_IF);
 
 	/* Revoke the key */
-	ma35d1_write_reg(ks_dev, KS_CTL, KS_OP_REVOKE | KS_CTL_START |
-			 (ma35d1_read_reg(ks_dev, KS_CTL) & KS_CLT_FUNC_MASK));
+	ma35_write_reg(ks_dev, KS_CTL,	KS_OP_REVOKE | KS_CTL_START |
+		       (ma35_read_reg(ks_dev, KS_CTL) & KS_CLT_FUNC_MASK));
 
 	/* Waiting for processing */
-	if (ma35d1_ks_wait_busy_clear(ks_dev) != 0)
+	if (ma35_ks_wait_busy_clear(ks_dev) != 0)
 		return -EBUSY;
 
 	/* Check error flag */
-	if (ma35d1_read_reg(ks_dev, KS_STS) & KS_STS_EIF) {
+	if (ma35_read_reg(ks_dev, KS_STS) & KS_STS_EIF) {
 		pr_err("KS EIF set on revoking a key!\n");
 		return -EIO;
 	}
 	return 0;
 }
 
-static int ma35d1_ks_remain(struct ma35d1_ks_dev *ks_dev)
+static int ma35_ks_remain(struct ma35_ks_dev *ks_dev)
 {
 	u32 reg_data, sram_remain;
 
-	reg_data = ma35d1_read_reg(ks_dev, KS_REMAIN);
+	reg_data = ma35_read_reg(ks_dev, KS_REMAIN);
 	sram_remain = (reg_data & KS_REMAIN_RRMNG_Msk) >> KS_REMAIN_RRMNG_Pos;
 
 	return sram_remain;
@@ -379,23 +380,23 @@ static int ma35d1_ks_remain(struct ma35d1_ks_dev *ks_dev)
 
 static int ks_dev_open(struct inode *iptr, struct file *fptr)
 {
-	struct ma35d1_ks_dev *ks_dev;
+	struct ma35_ks_dev *ks_dev;
 	unsigned long timeout;
 
-	ks_dev = container_of(fptr->private_data, struct ma35d1_ks_dev, miscdev);
+	ks_dev = container_of(fptr->private_data, struct ma35_ks_dev, miscdev);
 
 	/* Start Key Store Initial */
-	ma35d1_write_reg(ks_dev, KS_CTL, KS_CTL_INIT | KS_CTL_START);
+	ma35_write_reg(ks_dev, KS_CTL, KS_CTL_INIT | KS_CTL_START);
 
 	/* Waiting for KeyStore initilization done */
 	timeout = jiffies + msecs_to_jiffies(KS_BUSY_TIMEOUT);
-	while ((ma35d1_read_reg(ks_dev, KS_STS) & KS_STS_INITDONE) == 0) {
+	while ((ma35_read_reg(ks_dev, KS_STS) & KS_STS_INITDONE) == 0) {
 		if (time_after(jiffies, timeout))
 			return -EIO;
 	}
 
 	/* Waiting for processing */
-	if (ma35d1_ks_wait_busy_clear(ks_dev) != 0)
+	if (ma35_ks_wait_busy_clear(ks_dev) != 0)
 		return -EBUSY;
 
 	return 0;
@@ -408,42 +409,42 @@ static int ks_dev_release(struct inode *iptr, struct file *fptr)
 
 static long ks_dev_ioctl(struct file *fptr, unsigned int cmd, unsigned long data)
 {
-	struct ma35d1_ks_dev *ks_dev;
+	struct ma35_ks_dev *ks_dev;
 	char __user *argp = (char __user *)data;
 	int rval = -EINVAL;
 
-	ks_dev = container_of(fptr->private_data, struct ma35d1_ks_dev, miscdev);
+	ks_dev = container_of(fptr->private_data, struct ma35_ks_dev, miscdev);
 
-	if (_IOC_TYPE(cmd) != MA35D1_KS_MAGIC)
+	if (_IOC_TYPE(cmd) != MA35_KS_MAGIC)
 		return -ENOTTY;
 
 	switch (cmd) {
 	case NU_KS_IOCTL_READ:
-		rval = ma35d1_ks_read(ks_dev, argp);
+		rval = ma35_ks_read(ks_dev, argp);
 		break;
 
 	case NU_KS_IOCTL_WRITE_SRAM:
-		rval = ma35d1_ks_write_sram(ks_dev, argp);
+		rval = ma35_ks_write_sram(ks_dev, argp);
 		break;
 
 	case NU_KS_IOCTL_WRITE_OTP:
-		rval = ma35d1_ks_write_otp(ks_dev, argp);
+		rval = ma35_ks_write_otp(ks_dev, argp);
 		break;
 
 	case NU_KS_IOCTL_ERASE:
-		rval = ma35d1_ks_erase(ks_dev, argp);
+		rval = ma35_ks_erase(ks_dev, argp);
 		break;
 
 	case NU_KS_IOCTL_ERASE_ALL:
-		rval = ma35d1_ks_erase_all(ks_dev);
+		rval = ma35_ks_erase_all(ks_dev);
 		break;
 
 	case NU_KS_IOCTL_REVOKE:
-		rval = ma35d1_ks_revoke(ks_dev, argp);
+		rval = ma35_ks_revoke(ks_dev, argp);
 		break;
 
 	case NU_KS_IOCTL_GET_REMAIN:
-		rval = ma35d1_ks_remain(ks_dev);
+		rval = ma35_ks_remain(ks_dev);
 		break;
 	default:
 		/* Should not get here */
@@ -452,7 +453,7 @@ static long ks_dev_ioctl(struct file *fptr, unsigned int cmd, unsigned long data
 	return rval;
 }
 
-static const struct file_operations ma35d1_ks_fops = {
+static const struct file_operations ma35_ks_fops = {
 	.owner = THIS_MODULE,
 	.open = ks_dev_open,
 	.release = ks_dev_release,
@@ -460,10 +461,10 @@ static const struct file_operations ma35d1_ks_fops = {
 	.compat_ioctl = ks_dev_ioctl,
 };
 
-static int ma35d1_ks_probe(struct platform_device *pdev)
+static int ma35_ks_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
-	struct ma35d1_ks_dev *ks_dev;
+	struct ma35_ks_dev *ks_dev;
 	struct resource *res;
 	int ret;
 
@@ -488,7 +489,7 @@ static int ma35d1_ks_probe(struct platform_device *pdev)
 
 	ks_dev->miscdev.minor = MISC_DYNAMIC_MINOR;
 	ks_dev->miscdev.name = ks_miscdev_name;
-	ks_dev->miscdev.fops = &ma35d1_ks_fops;
+	ks_dev->miscdev.fops = &ma35_ks_fops;
 	ks_dev->miscdev.parent = dev;
 	ret = misc_register(&ks_dev->miscdev);
 	if (ret) {
@@ -496,37 +497,36 @@ static int ma35d1_ks_probe(struct platform_device *pdev)
 		return ret;
 	}
 
-	dev_info(dev, "MA35 KeyStore initialized.\n");
+	printk("ma35 kstore initialized.\n");
 	return 0;
 }
 
-static void ma35d1_ks_remove(struct platform_device *pdev)
+static void ma35_ks_remove(struct platform_device *pdev)
 {
-	struct ma35d1_ks_dev *ks_dev;
+	struct ma35_ks_dev *ks_dev;
 
 	ks_dev = platform_get_drvdata(pdev);
 	misc_deregister(&ks_dev->miscdev);
 }
 
-static const struct of_device_id ma35d1_ks_of_match[] = {
-	{ .compatible = "nuvoton,ma35d1-kstore" },
+static const struct of_device_id ma35_ks_of_match[] = {
 	{ .compatible = "nuvoton,ma35d0-kstore" },
 	{ .compatible = "nuvoton,ma35h0-kstore" },
 	{ /* end of table */ }
 };
-MODULE_DEVICE_TABLE(of, ma35d1_ks_of_match);
+MODULE_DEVICE_TABLE(of, ma35_ks_of_match);
 
-static struct platform_driver ma35d1_ks_driver = {
-	.probe = ma35d1_ks_probe,
-	.remove = ma35d1_ks_remove,
+static struct platform_driver ma35_ks_driver = {
+	.probe = ma35_ks_probe,
+	.remove = ma35_ks_remove,
 	.driver = {
-		.name = "ma35d1-kstore",
-		.of_match_table = ma35d1_ks_of_match,
+		.name = "ma35-kstore",
+		.of_match_table = ma35_ks_of_match,
 	},
 };
 
-module_platform_driver(ma35d1_ks_driver);
+module_platform_driver(ma35_ks_driver);
 
 MODULE_LICENSE("GPL v2");
 MODULE_AUTHOR("Nuvoton, Inc");
-MODULE_DESCRIPTION("Nuvoton MA35D1 Series KeyStore Driver");
+MODULE_DESCRIPTION("Nuvoton MA35 Key Store Driver");

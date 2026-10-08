@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
- * linux/driver/crypto/nuvoton/ma35d1-crypto.c
+ * linux/driver/crypto/nuvoton/ma35-crypto.c
  *
  * Copyright (c) 2025 Nuvoton technology corporation.
  *
@@ -22,11 +22,11 @@
 #include <linux/io.h>
 #include <linux/clk.h>
 
-#include "ma35d1-crypto.h"
+#include "ma35-crypto.h"
 
-static struct nu_crypto_dev *_ma35d1_crypto_dev;
+static struct nu_crypto_dev *_ma35_crypto_dev;
 
-static irqreturn_t ma35d1_crypto_irq(int irq, void *data)
+static irqreturn_t ma35_crypto_irq(int irq, void *data)
 {
 	struct nu_crypto_dev  *crypto_dev = (struct nu_crypto_dev *)data;
 	struct nu_aes_dev  *aes_dd = &crypto_dev->aes_dd;
@@ -57,7 +57,7 @@ static irqreturn_t ma35d1_crypto_irq(int irq, void *data)
 	return ret;
 }
 
-static int ma35d1_crypto_probe(struct platform_device *pdev)
+static int ma35_crypto_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	struct nu_crypto_dev *crypto_dev;
@@ -73,7 +73,7 @@ static int ma35d1_crypto_probe(struct platform_device *pdev)
 		return -ENOMEM;
 
 	dev_set_drvdata(dev, crypto_dev);
-	_ma35d1_crypto_dev = crypto_dev;
+	_ma35_crypto_dev = crypto_dev;
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	crypto_dev->reg_base = devm_ioremap_resource(dev, res);
@@ -87,50 +87,50 @@ static int ma35d1_crypto_probe(struct platform_device *pdev)
 	 */
 	irq = platform_get_irq(pdev, 0);
 	if (irq <= 0) {
-		dev_err(dev, "Failed to get ma35d1 crypto irq!\n");
+		dev_err(dev, "Failed to get ma35 crypto irq!\n");
 		return -ENODEV;
 	}
-	err = devm_request_irq(dev, irq, ma35d1_crypto_irq, IRQF_SHARED,
-			       "ma35d1-crypto", crypto_dev);
+	err = devm_request_irq(dev, irq, ma35_crypto_irq, IRQF_SHARED,
+			       "ma35-crypto", crypto_dev);
 	if (err) {
 		dev_err(dev, "Failed to request IRQ%d: err: %d.\n", irq, err);
 		return err;
 	}
 
-	err = ma35d1_prng_probe(dev, crypto_dev->reg_base, &crypto_dev->prng);
+	err = ma35_prng_probe(dev, crypto_dev->reg_base, &crypto_dev->prng);
 	if (err)
-		dev_err(dev, "failed to init ma35d1-prng!\n");
+		dev_err(dev, "failed to init ma35-prng!\n");
 
-	err = ma35d1_aes_probe(dev, crypto_dev);
+	err = ma35_aes_probe(dev, crypto_dev);
 	if (err)
-		dev_err(dev, "failed to init ma35d1-aes!\n");
+		dev_err(dev, "failed to init ma35-aes!\n");
 
-	err = ma35d1_sha_probe(dev, crypto_dev);
+	err = ma35_sha_probe(dev, crypto_dev);
 	if (err)
-		dev_err(dev, "failed to init ma35d1-sha!\n");
+		dev_err(dev, "failed to init ma35-sha!\n");
 
 	crypto_dev->ecc_ioctl = false;
 	if (!of_property_read_string(dev->of_node, "ecc_ioctl", &str)) {
 		if (!strcmp("yes", str))
 			crypto_dev->ecc_ioctl = true;
 	}
-	err = ma35d1_ecc_probe(dev, crypto_dev);
+	err = ma35_ecc_probe(dev, crypto_dev);
 	if (err)
-		dev_err(dev, "failed to init ma35d1-ecc!\n");
+		dev_err(dev, "failed to init ma35-ecc!\n");
 
 	crypto_dev->rsa_ioctl = false;
 	if (!of_property_read_string(dev->of_node, "rsa_ioctl", &str)) {
 		if (!strcmp("yes", str))
 			crypto_dev->rsa_ioctl = true;
 	}
-	err = ma35d1_rsa_probe(dev, crypto_dev);
+	err = ma35_rsa_probe(dev, crypto_dev);
 	if (err)
-		dev_err(dev, "failed to init ma35d1-rsa!\n");
+		dev_err(dev, "failed to init ma35-rsa!\n");
 
 	return 0;
 }
 
-static void ma35d1_crypto_remove(struct platform_device *pdev)
+static void ma35_crypto_remove(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	struct nu_crypto_dev *crypto_dev;
@@ -139,35 +139,34 @@ static void ma35d1_crypto_remove(struct platform_device *pdev)
 	if (!crypto_dev)
 		return;
 
-	ma35d1_prng_remove(&pdev->dev, crypto_dev->prng);
-	ma35d1_aes_remove(&pdev->dev, crypto_dev);
-	ma35d1_sha_remove(&pdev->dev, crypto_dev);
-	ma35d1_ecc_remove(&pdev->dev, crypto_dev);
-	ma35d1_rsa_remove(&pdev->dev, crypto_dev);
+	ma35_prng_remove(&pdev->dev, crypto_dev->prng);
+	ma35_aes_remove(&pdev->dev, crypto_dev);
+	ma35_sha_remove(&pdev->dev, crypto_dev);
+	ma35_ecc_remove(&pdev->dev, crypto_dev);
+	ma35_rsa_remove(&pdev->dev, crypto_dev);
 
 	devm_kfree(dev, crypto_dev);
 }
 
-static const struct of_device_id ma35d1_crypto_of_match[] = {
-	{ .compatible = "nuvoton,ma35d1-crypto" },
+static const struct of_device_id ma35_crypto_of_match[] = {
 	{ .compatible = "nuvoton,ma35d0-crypto" },
 	{ .compatible = "nuvoton,ma35h0-crypto" },
 	{},
 };
-MODULE_DEVICE_TABLE(of, ma35d1_crypto_of_match);
+MODULE_DEVICE_TABLE(of, ma35_crypto_of_match);
 
 
-static struct platform_driver ma35d1_crypto_driver = {
-	.probe  = ma35d1_crypto_probe,
-	.remove = ma35d1_crypto_remove,
+static struct platform_driver ma35_crypto_driver = {
+	.probe  = ma35_crypto_probe,
+	.remove = ma35_crypto_remove,
 	.driver = {
-		.name = "ma35d1-crypto",
+		.name = "ma35-crypto",
 		.owner = THIS_MODULE,
-		.of_match_table = ma35d1_crypto_of_match,
+		.of_match_table = ma35_crypto_of_match,
 	},
 };
 
-module_platform_driver(ma35d1_crypto_driver);
+module_platform_driver(ma35_crypto_driver);
 
 MODULE_AUTHOR("Nuvoton Technology Corporation");
 MODULE_DESCRIPTION("Nuvoton Cryptographic Accelerator");

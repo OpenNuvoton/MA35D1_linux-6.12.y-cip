@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
- * Nuvoton MA35D1 series key store op-tee driver
+ * Nuvoton MA35 series key store op-tee driver
  *
- * Copyright (c) 2026 Nuvoton technology corporation.
+ * Copyright (c) 2025 Nuvoton technology corporation.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -15,9 +15,9 @@
 #include <linux/interrupt.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
+#include <linux/platform_device.h>
 #include <linux/clk.h>
 #include <linux/of_platform.h>
-#include <linux/platform_device.h>
 #include <linux/poll.h>
 #include <linux/slab.h>
 #include <linux/clk.h>
@@ -25,7 +25,7 @@
 #include <linux/highmem.h>
 #include <linux/tee_drv.h>
 
-#include <uapi/misc/ma35d1_kstore.h>
+#include <uapi/misc/ma35_kstore.h>
 
 #define MISCDEV_NAME		"ksdev"
 
@@ -172,7 +172,7 @@ static uint16_t au8OTPCntTbl[7] = {4, 6, 6, 7, 8, 8, 8};
 #define KS_DATA_SHM_SZ			1024
 
 /**
- * struct optee_ks_private - OP-TEE private data of ma35d1 key store
+ * struct optee_ks_private - OP-TEE private data of ma35 key store
  * @dev:		OP-TEE based device.
  * @ctx:		OP-TEE context handler.
  * @session_id:		KS TA session identifier.
@@ -573,7 +573,7 @@ static long optee_ks_dev_ioctl(struct file *fptr, unsigned int cmd,
 
 	ks_priv = container_of(fptr->private_data, struct optee_ks_private, miscdev);
 
-	if (_IOC_TYPE(cmd) != MA35D1_KS_MAGIC)
+	if (_IOC_TYPE(cmd) != MA35_KS_MAGIC)
 		return -ENOTTY;
 
 	switch (cmd) {
@@ -620,7 +620,7 @@ static long optee_ks_dev_ioctl(struct file *fptr, unsigned int cmd,
 	return ret;
 }
 
-static const struct file_operations ma35d1_ks_optee_fops = {
+static const struct file_operations ma35_ks_optee_fops = {
 	.owner = THIS_MODULE,
 	.open = optee_ks_dev_open,
 	.release = optee_ks_dev_release,
@@ -694,7 +694,7 @@ static int optee_ks_probe(struct device *dev)
 	 */
 	pvt_data.miscdev.minor = MISC_DYNAMIC_MINOR;
 	pvt_data.miscdev.name = ks_miscdev_name;
-	pvt_data.miscdev.fops = &ma35d1_ks_optee_fops;
+	pvt_data.miscdev.fops = &ma35_ks_optee_fops;
 	pvt_data.miscdev.parent = dev;
 	ret = misc_register(&pvt_data.miscdev);
 	if (ret) {
@@ -702,7 +702,7 @@ static int optee_ks_probe(struct device *dev)
 		goto out_sess;
 	}
 
-	dev_info(dev, "MA35 KeyStore optee initialized.\n");
+	printk("ma35 kstore-optee initialized.\n");
 	return 0;
 
 out_sess:
@@ -732,7 +732,7 @@ MODULE_DEVICE_TABLE(tee, optee_ks_id_table);
 static struct tee_client_driver optee_ks_driver = {
 	.id_table	= optee_ks_id_table,
 	.driver		= {
-		.name		= "ma35d1-kstore-optee",
+		.name		= "ma35-kstore-optee",
 		.bus		= &tee_bus_type,
 		.probe		= optee_ks_probe,
 		.remove		= optee_ks_remove,
@@ -745,9 +745,9 @@ static int ma35d1_ks_probe(struct platform_device *pdev)
 
 	err = driver_register(&optee_ks_driver.driver);
 	if (err)
-		pr_debug("Failed to register ma35d1-kstore-optee!\n");
+		pr_debug("Failed to register ma35-kstore-optee!\n");
 	else
-		pr_info("ma35d1-kstore-optee initialized.\n");
+		pr_info("ma35-kstore-optee initialized.\n");
 
 	return err;
 }
@@ -756,20 +756,20 @@ static void ma35d1_ks_remove(struct platform_device *pdev)
 {
 }
 
-static const struct of_device_id ma35d1_ks_of_match[] = {
-	{ .compatible = "nuvoton,ma35d1-kstore-optee" },
-	{ .compatible = "nuvoton,ma35d0-kstore-optee" },
-	{ .compatible = "nuvoton,ma35h0-kstore-optee" },
+static const struct of_device_id ma35_ks_of_match[] = {
+	{
+		.compatible = "nuvoton,ma35d1-kstore-optee",
+	},
 	{ /* end of table */ }
 };
-MODULE_DEVICE_TABLE(of, ma35d1_ks_of_match);
+MODULE_DEVICE_TABLE(of, ma35_ks_of_match);
 
 static struct platform_driver ma35d1_ks_driver = {
 	.probe = ma35d1_ks_probe,
 	.remove =  ma35d1_ks_remove,
 	.driver = {
 		.name = "ma35d1-kstore-optee",
-		.of_match_table = ma35d1_ks_of_match,
+		.of_match_table = ma35_ks_of_match,
 	},
 };
 
@@ -777,4 +777,4 @@ module_platform_driver(ma35d1_ks_driver);
 
 MODULE_LICENSE("GPL v2");
 MODULE_AUTHOR("Nuvoton, Inc");
-MODULE_DESCRIPTION("Nuvoton MA35D1 Series Key Store Driver");
+MODULE_DESCRIPTION("Nuvoton MA35D1 Key Store Driver");

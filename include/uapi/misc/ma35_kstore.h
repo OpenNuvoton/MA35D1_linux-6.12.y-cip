@@ -1,8 +1,8 @@
 /* SPDX-License-Identifier: GPL-2.0+ WITH Linux-syscall-note */
 /*
- * Nuvoton MA35D1 Key Store
+ * Nuvoton MA35 Key Store
  *
- * Copyright (c) 2026 Nuvoton technology corporation.
+ * Copyright (c) 2025 Nuvoton technology corporation.
  *
  *
  * This program is free software; you can redistribute it and/or modify
@@ -10,8 +10,8 @@
  * the Free Software Foundation;version 2 of the License.
  *
  */
-#ifndef __MA35D1_KEYSTORE_H__
-#define __MA35D1_KEYSTORE_H__
+#ifndef __MA35_KEYSTORE_H__
+#define __MA35_KEYSTORE_H__
 
 #include <linux/types.h>
 
@@ -105,18 +105,18 @@
 #define KS_TOMETAKEY(x)		(((x) << KS_METADATA_NUMBER_Pos) & KS_METADATA_NUMBER_Msk)
 #define KS_TOKEYIDX(x)		(((x) & KS_METADATA_NUMBER_Msk) >> KS_METADATA_NUMBER_Pos)
 
-#define MA35D1_KS_MAGIC		'K'
+#define MA35_KS_MAGIC		'K'
 
-#define NU_KS_IOCTL_READ	_IOWR(MA35D1_KS_MAGIC, 1, struct ks_read_args *)
-#define NU_KS_IOCTL_WRITE_SRAM	_IOWR(MA35D1_KS_MAGIC, 2, struct ks_write_args *)
-#define NU_KS_IOCTL_WRITE_OTP	_IOWR(MA35D1_KS_MAGIC, 3, struct ks_write_args *)
-#define NU_KS_IOCTL_ERASE	_IOWR(MA35D1_KS_MAGIC, 4, struct ks_kidx_args *)
-#define NU_KS_IOCTL_ERASE_ALL	_IOWR(MA35D1_KS_MAGIC, 5, unsigned long)
-#define NU_KS_IOCTL_REVOKE	_IOWR(MA35D1_KS_MAGIC, 6, struct ks_kidx_args *)
-#define NU_KS_IOCTL_GET_REMAIN	_IOWR(MA35D1_KS_MAGIC, 7, unsigned long)
+#define NU_KS_IOCTL_READ	_IOWR(MA35_KS_MAGIC, 1, struct ks_read_args *)
+#define NU_KS_IOCTL_WRITE_SRAM	_IOWR(MA35_KS_MAGIC, 2, struct ks_write_args *)
+#define NU_KS_IOCTL_WRITE_OTP	_IOWR(MA35_KS_MAGIC, 3, struct ks_write_args *)
+#define NU_KS_IOCTL_ERASE	_IOWR(MA35_KS_MAGIC, 4, struct ks_kidx_args *)
+#define NU_KS_IOCTL_ERASE_ALL	_IOWR(MA35_KS_MAGIC, 5, unsigned long)
+#define NU_KS_IOCTL_REVOKE	_IOWR(MA35_KS_MAGIC, 6, struct ks_kidx_args *)
+#define NU_KS_IOCTL_GET_REMAIN	_IOWR(MA35_KS_MAGIC, 7, unsigned long)
 
-#define NU_KS_IOCTL_OTP_READ	_IOWR(MA35D1_KS_MAGIC, 11, struct ks_read_args *)
-#define NU_KS_IOCTL_OTP_WRITE	_IOWR(MA35D1_KS_MAGIC, 12, struct ks_read_args *)
+#define NU_KS_IOCTL_OTP_READ	_IOWR(MA35_KS_MAGIC, 11, struct ks_read_args *)
+#define NU_KS_IOCTL_OTP_WRITE	_IOWR(MA35_KS_MAGIC, 12, struct ks_read_args *)
 
 /* type of key */
 #define KS_SRAM			0x0
@@ -140,4 +140,4 @@ struct ks_kidx_args {
 	unsigned int  key_idx;
 };
 
-#endif
+#endif /* __MA35_KEYSTORE_H__ */

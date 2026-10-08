@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
- * linux/driver/crypto/nuvoton/ma35d1-ecc.c
+ * linux/driver/crypto/nuvoton/ma35-ecc.c
  *
  * Copyright (c) 2025 Nuvoton technology corporation.
  *
@@ -26,7 +26,7 @@
 #include <linux/clk.h>
 #include <linux/miscdevice.h>
 
-#include "ma35d1-crypto.h"
+#include "ma35-crypto.h"
 
 static struct nu_ecc_dev  *__ecc_dd;
 
@@ -709,7 +709,7 @@ static struct nu_ecc_drv nu_ecc = {
 	.lock = __SPIN_LOCK_UNLOCKED(nu_ecc.lock),
 };
 
-static struct nu_ecc_dev *ma35d1_ecc_find_dev(struct nu_ecc_ctx *tctx)
+static struct nu_ecc_dev *ma35_ecc_find_dev(struct nu_ecc_ctx *tctx)
 {
 	struct nu_ecc_dev *dd = NULL;
 	struct nu_ecc_dev *tmp;
@@ -731,17 +731,17 @@ static struct nu_ecc_dev *ma35d1_ecc_find_dev(struct nu_ecc_ctx *tctx)
 	return dd;
 }
 
-static inline void ma35d1_write_reg(struct nu_ecc_dev *ecc_dd, u32 val, u32 reg)
+static inline void ma35_write_reg(struct nu_ecc_dev *ecc_dd, u32 val, u32 reg)
 {
 	writel_relaxed(val, ecc_dd->reg_base + reg);
 }
 
-static inline u32 ma35d1_read_reg(struct nu_ecc_dev *ecc_dd, u32 reg)
+static inline u32 ma35_read_reg(struct nu_ecc_dev *ecc_dd, u32 reg)
 {
 	return readl_relaxed(ecc_dd->reg_base + reg);
 }
 
-static inline void ma35d1_write_ecc_key(struct nu_ecc_ctx *ctx, u8 *key, u32 reg)
+static inline void ma35_write_ecc_key(struct nu_ecc_ctx *ctx, u8 *key, u32 reg)
 {
 	struct nu_ecc_dev *dd = ctx->dd;
 	u32 val32;
@@ -758,11 +758,11 @@ static inline void ma35d1_write_ecc_key(struct nu_ecc_ctx *ctx, u8 *key, u32 reg
 			val32 |= (key[i-1] << 8);
 		val32 |= key[i];
 		i -= 4;
-		ma35d1_write_reg(dd, val32, reg + ri * 4);
+		ma35_write_reg(dd, val32, reg + ri * 4);
 	}
 }
 
-static inline void ma35d1_read_ecc_key(struct nu_ecc_ctx *ctx, u32 reg, u8 *key)
+static inline void ma35_read_ecc_key(struct nu_ecc_ctx *ctx, u32 reg, u8 *key)
 {
 	struct nu_ecc_dev *dd = ctx->dd;
 	u32 val32;
@@ -771,7 +771,7 @@ static inline void ma35d1_read_ecc_key(struct nu_ecc_ctx *ctx, u32 reg, u8 *key)
 	wcnt = (ctx->keylen + 3) / 4;
 	idx = wcnt - 1;
 
-	val32 = ma35d1_read_reg(dd, reg + idx * 4);
+	val32 = ma35_read_reg(dd, reg + idx * 4);
 	i = 0;
 	if (ctx->keylen % 4 == 1) {
 		key[i++] = val32 & 0xff;
@@ -788,7 +788,7 @@ static inline void ma35d1_read_ecc_key(struct nu_ecc_ctx *ctx, u32 reg, u8 *key)
 	}
 
 	for (; idx >= 0; i += 4) {
-		val32 = ma35d1_read_reg(dd, reg + idx * 4);
+		val32 = ma35_read_reg(dd, reg + idx * 4);
 		idx--;
 		key[i]   = (val32 >> 24) & 0xff;
 		key[i+1] = (val32 >> 16) & 0xff;
@@ -811,28 +811,28 @@ static inline int get_nibble_value(char c)
 	return (int)c;
 }
 
-static inline int ma35d1_wait_ecc_complete(struct nu_ecc_dev *dd, int timeout)
+static inline int ma35_wait_ecc_complete(struct nu_ecc_dev *dd, int timeout)
 {
 	unsigned long t_out;
 
 	t_out = jiffies + timeout;
-	while (ma35d1_read_reg(dd, ECC_STS) & (ECC_STS_BUSY | ECC_STS_DMABUSY)) {
+	while (ma35_read_reg(dd, ECC_STS) & (ECC_STS_BUSY | ECC_STS_DMABUSY)) {
 		if (!time_before(jiffies, t_out)) {
-			ma35d1_write_reg(dd, ECC_CTL_STOP, ECC_CTL);
-			pr_err("ECC hardware timeout! 0x%x\n", ma35d1_read_reg(dd, ECC_STS));
+			ma35_write_reg(dd, ECC_CTL_STOP, ECC_CTL);
+			pr_err("ECC hardware timeout! 0x%x\n", ma35_read_reg(dd, ECC_STS));
 			return -EBUSY;
 		}
 
-		if (ma35d1_read_reg(dd, ECC_STS) &
+		if (ma35_read_reg(dd, ECC_STS) &
 			(ECC_STS_BUSERR | ECC_STS_KSERR)) {
-			pr_err("ECC hardware error! 0x%x\n", ma35d1_read_reg(dd, ECC_STS));
+			pr_err("ECC hardware error! 0x%x\n", ma35_read_reg(dd, ECC_STS));
 			return -EIO;
 		}
 	}
 	return 0;
 }
 
-static int ma35d1_ecc_init_curve(int curve_id, struct nu_ecc_ctx *ctx)
+static int ma35_ecc_init_curve(int curve_id, struct nu_ecc_ctx *ctx)
 {
 	struct nu_ecc_dev *dd = ctx->dd;
 	struct nu_ecc_curve *curve = NULL;
@@ -849,79 +849,79 @@ static int ma35d1_ecc_init_curve(int curve_id, struct nu_ecc_ctx *ctx)
 	ctx->keylen = (curve->key_len + 7) / 8;
 
 	for (i = 0; i < 18; i++) {
-		ma35d1_write_reg(dd, 0, ECC_X1 + i * 4);
-		ma35d1_write_reg(dd, 0, ECC_Y1 + i * 4);
-		ma35d1_write_reg(dd, 0, ECC_X2 + i * 4);
-		ma35d1_write_reg(dd, 0, ECC_Y2 + i * 4);
-		ma35d1_write_reg(dd, 0, ECC_A + i * 4);
-		ma35d1_write_reg(dd, 0, ECC_B + i * 4);
-		ma35d1_write_reg(dd, 0, ECC_N + i * 4);
-		ma35d1_write_reg(dd, 0, ECC_K + i * 4);
+		ma35_write_reg(dd, 0, ECC_X1 + i * 4);
+		ma35_write_reg(dd, 0, ECC_Y1 + i * 4);
+		ma35_write_reg(dd, 0, ECC_X2 + i * 4);
+		ma35_write_reg(dd, 0, ECC_Y2 + i * 4);
+		ma35_write_reg(dd, 0, ECC_A + i * 4);
+		ma35_write_reg(dd, 0, ECC_B + i * 4);
+		ma35_write_reg(dd, 0, ECC_N + i * 4);
+		ma35_write_reg(dd, 0, ECC_K + i * 4);
 	}
 
-	ma35d1_write_ecc_key(ctx, curve->Px, ECC_X1);
-	ma35d1_write_ecc_key(ctx, curve->Py, ECC_Y1);
-	ma35d1_write_ecc_key(ctx, curve->Ea, ECC_A);
-	ma35d1_write_ecc_key(ctx, curve->Eb, ECC_B);
+	ma35_write_ecc_key(ctx, curve->Px, ECC_X1);
+	ma35_write_ecc_key(ctx, curve->Py, ECC_Y1);
+	ma35_write_ecc_key(ctx, curve->Ea, ECC_A);
+	ma35_write_ecc_key(ctx, curve->Eb, ECC_B);
 
 	if (curve->GF == CURVE_GF_2M) {
-		ma35d1_write_reg(dd, 0x1, ECC_N);
+		ma35_write_reg(dd, 0x1, ECC_N);
 
 		reg = ECC_N + (curve->key_len / 32) * 4;
-		ma35d1_write_reg(dd, ma35d1_read_reg(dd, reg) | (0x1 << (curve->key_len % 32)), reg);
+		ma35_write_reg(dd, ma35_read_reg(dd, reg) | (0x1 << (curve->key_len % 32)), reg);
 
 		reg = ECC_N + (curve->irreducible_k1 / 32) * 4;
-		ma35d1_write_reg(dd, ma35d1_read_reg(dd, reg) |
+		ma35_write_reg(dd, ma35_read_reg(dd, reg) |
 			       (0x1 << (curve->irreducible_k1 % 32)), reg);
 
 		reg = ECC_N + (curve->irreducible_k2 / 32) * 4;
-		ma35d1_write_reg(dd, ma35d1_read_reg(dd, reg) |
+		ma35_write_reg(dd, ma35_read_reg(dd, reg) |
 			       (0x1 << (curve->irreducible_k2 % 32)), reg);
 
 		reg = ECC_N + (curve->irreducible_k3 / 32) * 4;
-		ma35d1_write_reg(dd, ma35d1_read_reg(dd, reg) |
+		ma35_write_reg(dd, ma35_read_reg(dd, reg) |
 			       (0x1 << (curve->irreducible_k3 % 32)), reg);
 	} else {
-		ma35d1_write_ecc_key(ctx, curve->Pp, ECC_N);
+		ma35_write_ecc_key(ctx, curve->Pp, ECC_N);
 	}
 	return 0;
 }
 
-static int ma35d1_ecc_point_mult(struct nu_ecc_ctx *ctx, u8 *private_key,
+static int ma35_ecc_point_mult(struct nu_ecc_ctx *ctx, u8 *private_key,
 			       u8 *public_key, u8 *result)
 {
 	struct nu_ecc_dev *dd = ctx->dd;
 	int err;
 
 	if (public_key != NULL) {
-		ma35d1_write_ecc_key(ctx, public_key, ECC_X1);
-		ma35d1_write_ecc_key(ctx, public_key + ctx->keylen, ECC_Y1);
+		ma35_write_ecc_key(ctx, public_key, ECC_X1);
+		ma35_write_ecc_key(ctx, public_key + ctx->keylen, ECC_Y1);
 
 	} else {
 		/* use G point */
 	}
 
-	ma35d1_write_reg(dd, 0, ECC_KSCTL);
-	ma35d1_write_reg(dd, 0, ECC_KSXY);
+	ma35_write_reg(dd, 0, ECC_KSCTL);
+	ma35_write_reg(dd, 0, ECC_KSXY);
 
-	ma35d1_write_ecc_key(ctx, private_key, ECC_K);
+	ma35_write_ecc_key(ctx, private_key, ECC_K);
 
-	ma35d1_write_reg(dd, ((ctx->keylen * 8) << ECC_CTL_CURVEM_OFFSET) |
+	ma35_write_reg(dd, ((ctx->keylen * 8) << ECC_CTL_CURVEM_OFFSET) |
 		       ECC_CTL_FSEL | ECCOP_POINT_MUL | ECC_CTL_START, ECC_CTL);
 
-	err = ma35d1_wait_ecc_complete(dd, 2000);
+	err = ma35_wait_ecc_complete(dd, 2000);
 	if (err)
 		return err;
 
-	ma35d1_read_ecc_key(ctx, ECC_X1, result);
-	ma35d1_read_ecc_key(ctx, ECC_Y1, result + ctx->keylen);
+	ma35_read_ecc_key(ctx, ECC_X1, result);
+	ma35_read_ecc_key(ctx, ECC_Y1, result + ctx->keylen);
 	return 0;
 }
 
-static int ma35d1_ecdh_set_secret(struct crypto_kpp *tfm, const void *buf, unsigned int len)
+static int ma35_ecdh_set_secret(struct crypto_kpp *tfm, const void *buf, unsigned int len)
 {
 	struct nu_ecc_ctx *ctx = kpp_tfm_ctx(tfm);
-	struct nu_ecc_dev *dd = ma35d1_ecc_find_dev(ctx);
+	struct nu_ecc_dev *dd = ma35_ecc_find_dev(ctx);
 	struct ecdh params;
 	int err;
 
@@ -933,7 +933,7 @@ static int ma35d1_ecdh_set_secret(struct crypto_kpp *tfm, const void *buf, unsig
 		return -EINVAL;
 	}
 
-	err = ma35d1_ecc_init_curve(ctx->curve_id, ctx);
+	err = ma35_ecc_init_curve(ctx->curve_id, ctx);
 	if (err)
 		return err;
 
@@ -951,7 +951,7 @@ static int ma35d1_ecdh_set_secret(struct crypto_kpp *tfm, const void *buf, unsig
 	return 0;
 }
 
-static int ma35d1_ecdh_compute_value(struct kpp_request *req)
+static int ma35_ecdh_compute_value(struct kpp_request *req)
 {
 	struct crypto_kpp *tfm = crypto_kpp_reqtfm(req);
 	struct nu_ecc_ctx *ctx = kpp_tfm_ctx(tfm);
@@ -964,7 +964,7 @@ static int ma35d1_ecdh_compute_value(struct kpp_request *req)
 
 	ctx->dd = dd;
 
-	ret = ma35d1_ecc_init_curve(ctx->curve_id, ctx);
+	ret = ma35_ecc_init_curve(ctx->curve_id, ctx);
 	if (ret)
 		return ret;
 
@@ -982,12 +982,12 @@ static int ma35d1_ecdh_compute_value(struct kpp_request *req)
 		if (copied != public_key_sz)
 			return -EINVAL;
 
-		ret = ma35d1_ecc_point_mult(ctx, ctx->private_key, public_key, shared_secret);
+		ret = ma35_ecc_point_mult(ctx, ctx->private_key, public_key, shared_secret);
 
 		buf = shared_secret;
 	} else {
 		/* Make public key by private key and G */
-		ret = ma35d1_ecc_point_mult(ctx, ctx->private_key, NULL, public_key);
+		ret = ma35_ecc_point_mult(ctx, ctx->private_key, NULL, public_key);
 		buf = public_key;
 		nbytes = public_key_sz;
 	}
@@ -1005,7 +1005,7 @@ static int ma35d1_ecdh_compute_value(struct kpp_request *req)
 	return ret;
 }
 
-static unsigned int ma35d1_ecdh_max_size(struct crypto_kpp *tfm)
+static unsigned int ma35_ecdh_max_size(struct crypto_kpp *tfm)
 {
 	struct nu_ecc_ctx *ctx = kpp_tfm_ctx(tfm);
 
@@ -1013,7 +1013,7 @@ static unsigned int ma35d1_ecdh_max_size(struct crypto_kpp *tfm)
 	return (ctx->keylen * 2);
 }
 
-static int ma35d1_ecdh_p192_init_tfm(struct crypto_kpp *tfm)
+static int ma35_ecdh_p192_init_tfm(struct crypto_kpp *tfm)
 {
 	struct nu_ecc_ctx *ctx = kpp_tfm_ctx(tfm);
 
@@ -1022,23 +1022,23 @@ static int ma35d1_ecdh_p192_init_tfm(struct crypto_kpp *tfm)
 	return 0;
 }
 
-static struct kpp_alg ma35d1_ecdh_p192 = {
-	.set_secret = ma35d1_ecdh_set_secret,
-	.generate_public_key = ma35d1_ecdh_compute_value,
-	.compute_shared_secret = ma35d1_ecdh_compute_value,
-	.max_size = ma35d1_ecdh_max_size,
-	.init = ma35d1_ecdh_p192_init_tfm,
+static struct kpp_alg ma35_ecdh_p192 = {
+	.set_secret = ma35_ecdh_set_secret,
+	.generate_public_key = ma35_ecdh_compute_value,
+	.compute_shared_secret = ma35_ecdh_compute_value,
+	.max_size = ma35_ecdh_max_size,
+	.init = ma35_ecdh_p192_init_tfm,
 	.base = {
 		.cra_flags = CRYPTO_ALG_NEED_FALLBACK,
-		.cra_name = "ecdh-ma35d1-p192",
-		.cra_driver_name = "ecdh-p192-ma35d1-generic",
+		.cra_name = "ecdh-ma35-p192",
+		.cra_driver_name = "ecdh-p192-ma35-generic",
 		.cra_priority = 400,
 		.cra_module = THIS_MODULE,
 		.cra_ctxsize = sizeof(struct nu_ecc_ctx),
 	},
 };
 
-static int ma35d1_ecdh_p256_init_tfm(struct crypto_kpp *tfm)
+static int ma35_ecdh_p256_init_tfm(struct crypto_kpp *tfm)
 {
 	struct nu_ecc_ctx *ctx = kpp_tfm_ctx(tfm);
 
@@ -1047,23 +1047,23 @@ static int ma35d1_ecdh_p256_init_tfm(struct crypto_kpp *tfm)
 	return 0;
 }
 
-static struct kpp_alg ma35d1_ecdh_p256 = {
-	.set_secret = ma35d1_ecdh_set_secret,
-	.generate_public_key = ma35d1_ecdh_compute_value,
-	.compute_shared_secret = ma35d1_ecdh_compute_value,
-	.max_size = ma35d1_ecdh_max_size,
-	.init = ma35d1_ecdh_p256_init_tfm,
+static struct kpp_alg ma35_ecdh_p256 = {
+	.set_secret = ma35_ecdh_set_secret,
+	.generate_public_key = ma35_ecdh_compute_value,
+	.compute_shared_secret = ma35_ecdh_compute_value,
+	.max_size = ma35_ecdh_max_size,
+	.init = ma35_ecdh_p256_init_tfm,
 	.base = {
 		.cra_flags = CRYPTO_ALG_NEED_FALLBACK,
-		.cra_name = "ecdh-ma35d1-p256",
-		.cra_driver_name = "ecdh-p256-ma35d1-generic",
+		.cra_name = "ecdh-ma35-p256",
+		.cra_driver_name = "ecdh-p256-ma35-generic",
 		.cra_priority = 400,
 		.cra_module = THIS_MODULE,
 		.cra_ctxsize = sizeof(struct nu_ecc_ctx),
 	},
 };
 
-static int ma35d1_ecdh_p384_init_tfm(struct crypto_kpp *tfm)
+static int ma35_ecdh_p384_init_tfm(struct crypto_kpp *tfm)
 {
 	struct nu_ecc_ctx *ctx = kpp_tfm_ctx(tfm);
 
@@ -1072,43 +1072,24 @@ static int ma35d1_ecdh_p384_init_tfm(struct crypto_kpp *tfm)
 	return 0;
 }
 
-void cstr_to_hex(u8 *cstr, u8 *hex_buff, int klen);
-
-static struct kpp_alg ma35d1_ecdh_p384 = {
-	.set_secret = ma35d1_ecdh_set_secret,
-	.generate_public_key = ma35d1_ecdh_compute_value,
-	.compute_shared_secret = ma35d1_ecdh_compute_value,
-	.max_size = ma35d1_ecdh_max_size,
-	.init = ma35d1_ecdh_p384_init_tfm,
+static struct kpp_alg ma35_ecdh_p384 = {
+	.set_secret = ma35_ecdh_set_secret,
+	.generate_public_key = ma35_ecdh_compute_value,
+	.compute_shared_secret = ma35_ecdh_compute_value,
+	.max_size = ma35_ecdh_max_size,
+	.init = ma35_ecdh_p384_init_tfm,
 	.base = {
 		.cra_flags = CRYPTO_ALG_NEED_FALLBACK,
-		.cra_name = "ecdh-ma35d1-p384",
-		.cra_driver_name = "ecdh-p384-ma35d1-generic",
+		.cra_name = "ecdh-ma35-p384",
+		.cra_driver_name = "ecdh-p384-ma35-generic",
 		.cra_priority = 400,
 		.cra_module = THIS_MODULE,
 		.cra_ctxsize = sizeof(struct nu_ecc_ctx),
 	},
 };
 
-void cstr_to_hex(u8 *cstr, u8 *hex_buff, int klen)
-{
-	int i, kidx, bytes;
 
-	bytes = (klen + 7) / 8;
-	hex_buff[bytes] = 0;
-	hex_buff[bytes + 1] = 0;
-
-	i = strlen(cstr) - 1;
-	for (kidx = bytes - 1; kidx >= 0; kidx--) {
-		hex_buff[kidx] = 0;
-		if (i >= 0)
-			hex_buff[kidx] = get_nibble_value(cstr[i--]);
-		if (i >= 0)
-			hex_buff[kidx] |= (get_nibble_value(cstr[i--]) << 4);
-	}
-}
-
-static long ma35d1_ecc_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
+static long ma35_ecc_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
 	struct nu_ecc_dev *dd;
 	struct nu_ecc_ctx *ecc_ctx = filp->private_data;
@@ -1127,13 +1108,13 @@ static long ma35d1_ecc_ioctl(struct file *filp, unsigned int cmd, unsigned long 
 		if (copy_from_user(&args, (u8 *)arg, sizeof(args)))
 			return -EFAULT;
 
-		ma35d1_ecc_init_curve(args.curve, ecc_ctx);
+		ma35_ecc_init_curve(args.curve, ecc_ctx);
 
 		if (args.knum_d != -1) {
-			ma35d1_write_reg(dd, ECC_KSCTL_RSRCK | (args.knum_d & 0x9F), ECC_KSCTL);
+			ma35_write_reg(dd, ECC_KSCTL_RSRCK | (args.knum_d & 0x9F), ECC_KSCTL);
 		} else {
-			ma35d1_write_reg(dd, 0, ECC_KSCTL);
-			ma35d1_write_ecc_key(ecc_ctx, args.d, ECC_K);
+			ma35_write_reg(dd, 0, ECC_KSCTL);
+			ma35_write_ecc_key(ecc_ctx, args.d, ECC_K);
 		}
 
 		if (ecc_ctx->curve->GF == (int)CURVE_GF_2M) {
@@ -1143,18 +1124,18 @@ static long ma35d1_ecc_ioctl(struct file *filp, unsigned int cmd, unsigned long 
 			ecc_ctl = ECC_CTL_FSEL;
 		}
 
-		ma35d1_write_reg(dd, (ecc_ctx->curve->key_len << ECC_CTL_CURVEM_OFFSET) |
+		ma35_write_reg(dd, (ecc_ctx->curve->key_len << ECC_CTL_CURVEM_OFFSET) |
 			       ECCOP_POINT_MUL | ECC_CTL_START | ecc_ctl, ECC_CTL);
 
-		ret = ma35d1_wait_ecc_complete(dd, 2000);
+		ret = ma35_wait_ecc_complete(dd, 2000);
 		if (ret)
 			return ret;
 
-		ma35d1_read_ecc_key(ecc_ctx, ECC_X1, kbuf);
+		ma35_read_ecc_key(ecc_ctx, ECC_X1, kbuf);
 		if (copy_to_user(((struct ecc_args_t *)arg)->out_x, kbuf, ecc_ctx->keylen))
 			return -EFAULT;
 
-		ma35d1_read_ecc_key(ecc_ctx, ECC_Y1, kbuf);
+		ma35_read_ecc_key(ecc_ctx, ECC_Y1, kbuf);
 		if (copy_to_user(((struct ecc_args_t *)arg)->out_y, kbuf, ecc_ctx->keylen))
 			return -EFAULT;
 		break;
@@ -1163,18 +1144,18 @@ static long ma35d1_ecc_ioctl(struct file *filp, unsigned int cmd, unsigned long 
 		if (copy_from_user(&args, (u8 *)arg, sizeof(args)))
 			return -EFAULT;
 
-		ma35d1_ecc_init_curve(args.curve, ecc_ctx);
+		ma35_ecc_init_curve(args.curve, ecc_ctx);
 
 		if (args.knum_d != -1) {
-			ma35d1_write_reg(dd, ECC_KSCTL_RSRCK | (args.knum_d & 0x9F), ECC_KSCTL);
+			ma35_write_reg(dd, ECC_KSCTL_RSRCK | (args.knum_d & 0x9F), ECC_KSCTL);
 		} else {
-			ma35d1_write_reg(dd, 0, ECC_KSCTL);
-			ma35d1_write_ecc_key(ecc_ctx, args.d, ECC_K);
+			ma35_write_reg(dd, 0, ECC_KSCTL);
+			ma35_write_ecc_key(ecc_ctx, args.d, ECC_K);
 		}
 
-		ma35d1_write_reg(dd, 0, ECC_KSXY);
-		ma35d1_write_ecc_key(ecc_ctx, args.Qx, ECC_X1);
-		ma35d1_write_ecc_key(ecc_ctx, args.Qy, ECC_Y1);
+		ma35_write_reg(dd, 0, ECC_KSXY);
+		ma35_write_ecc_key(ecc_ctx, args.Qx, ECC_X1);
+		ma35_write_ecc_key(ecc_ctx, args.Qy, ECC_Y1);
 
 		if (ecc_ctx->curve->GF == (int)CURVE_GF_2M) {
 			ecc_ctl = 0x0;
@@ -1183,18 +1164,18 @@ static long ma35d1_ecc_ioctl(struct file *filp, unsigned int cmd, unsigned long 
 			ecc_ctl = ECC_CTL_FSEL;
 		}
 
-		ma35d1_write_reg(dd, (ecc_ctx->curve->key_len << ECC_CTL_CURVEM_OFFSET) |
+		ma35_write_reg(dd, (ecc_ctx->curve->key_len << ECC_CTL_CURVEM_OFFSET) |
 			       ECCOP_POINT_MUL | ECC_CTL_START | ecc_ctl, ECC_CTL);
 
-		ret = ma35d1_wait_ecc_complete(dd, 2000);
+		ret = ma35_wait_ecc_complete(dd, 2000);
 		if (ret)
 			return ret;
 
-		ma35d1_read_ecc_key(ecc_ctx, ECC_X1, kbuf);
+		ma35_read_ecc_key(ecc_ctx, ECC_X1, kbuf);
 		if (copy_to_user(((struct ecc_args_t *)arg)->out_x, kbuf, ecc_ctx->keylen))
 			return -EFAULT;
 
-		ma35d1_read_ecc_key(ecc_ctx, ECC_Y1, kbuf);
+		ma35_read_ecc_key(ecc_ctx, ECC_Y1, kbuf);
 		if (copy_to_user(((struct ecc_args_t *)arg)->out_y, kbuf, ecc_ctx->keylen))
 			return -EFAULT;
 		break;
@@ -1213,7 +1194,7 @@ static long ma35d1_ecc_ioctl(struct file *filp, unsigned int cmd, unsigned long 
 	return 0;
 }
 
-static int ma35d1_ecc_open(struct inode *inode, struct file *file)
+static int ma35_ecc_open(struct inode *inode, struct file *file)
 {
 	struct nu_ecc_ctx *ecc_ctx;
 
@@ -1226,7 +1207,7 @@ static int ma35d1_ecc_open(struct inode *inode, struct file *file)
 	return 0;
 }
 
-static int ma35d1_ecc_close(struct inode *inode, struct file *file)
+static int ma35_ecc_close(struct inode *inode, struct file *file)
 {
 	struct nu_ecc_ctx  *ecc_ctx;
 
@@ -1237,20 +1218,20 @@ static int ma35d1_ecc_close(struct inode *inode, struct file *file)
 	return 0;
 }
 
-static const struct file_operations ma35d1_ecc_fops = {
+static const struct file_operations ma35_ecc_fops = {
 	.owner		= THIS_MODULE,
-	.unlocked_ioctl	= ma35d1_ecc_ioctl,
-	.open           = ma35d1_ecc_open,
-	.release        = ma35d1_ecc_close,
+	.unlocked_ioctl	= ma35_ecc_ioctl,
+	.open           = ma35_ecc_open,
+	.release        = ma35_ecc_close,
 };
 
-static struct miscdevice ma35d1_ecc_dev = {
+static struct miscdevice ma35_ecc_dev = {
 	.minor		= MISC_DYNAMIC_MINOR,
 	.name		= "nuvoton-ecc",
-	.fops		= &ma35d1_ecc_fops,
+	.fops		= &ma35_ecc_fops,
 };
 
-int ma35d1_ecc_probe(struct device *dev, struct nu_crypto_dev *crypto_dev)
+int ma35_ecc_probe(struct device *dev, struct nu_crypto_dev *crypto_dev)
 {
 	struct nu_ecc_dev *ecc_dd = &crypto_dev->ecc_dd;
 	int err = 0;
@@ -1269,28 +1250,28 @@ int ma35d1_ecc_probe(struct device *dev, struct nu_crypto_dev *crypto_dev)
 	spin_unlock(&nu_ecc.lock);
 
 	if (crypto_dev->ecc_ioctl == true) {
-		misc_register(&ma35d1_ecc_dev);
+		misc_register(&ma35_ecc_dev);
 	} else {
-		err = crypto_register_kpp(&ma35d1_ecdh_p192);
+		err = crypto_register_kpp(&ma35_ecdh_p192);
 		if (err) {
-			dev_err(dev, "register ma35d1_ecdh_p192 failed\n");
+			dev_err(dev, "register ma35_ecdh_p192 failed\n");
 			goto err_out;
 		}
 
-		err = crypto_register_kpp(&ma35d1_ecdh_p256);
+		err = crypto_register_kpp(&ma35_ecdh_p256);
 		if (err) {
-			dev_err(dev, "register ma35d1_ecdh_p256 failed\n");
+			dev_err(dev, "register ma35_ecdh_p256 failed\n");
 			goto err_out;
 		}
 
-		err = crypto_register_kpp(&ma35d1_ecdh_p384);
+		err = crypto_register_kpp(&ma35_ecdh_p384);
 		if (err) {
-			dev_err(dev, "register ma35d1_ecdh_p384 failed\n");
+			dev_err(dev, "register ma35_ecdh_p384 failed\n");
 			goto err_out;
 		}
 	}
 
-	pr_info("ma35d1 crypto ecc engine initialized.\n");
+	pr_info("ma35 crypto ecc engine initialized.\n");
 	return 0;
 
 err_out:
@@ -1298,11 +1279,11 @@ err_out:
 	list_del(&ecc_dd->list);
 	spin_unlock(&nu_ecc.lock);
 
-	dev_err(dev, "ma35d1 ecc initialization failed. %d\n", err);
+	dev_err(dev, "ma35 ecc initialization failed. %d\n", err);
 	return err;
 }
 
-int ma35d1_ecc_remove(struct device *dev, struct nu_crypto_dev *crypto_dev)
+int ma35_ecc_remove(struct device *dev, struct nu_crypto_dev *crypto_dev)
 {
 	struct nu_ecc_dev *ecc_dd = &crypto_dev->ecc_dd;
 
@@ -1310,11 +1291,11 @@ int ma35d1_ecc_remove(struct device *dev, struct nu_crypto_dev *crypto_dev)
 		return -ENODEV;
 
 	if (crypto_dev->ecc_ioctl == true)
-		misc_deregister(&ma35d1_ecc_dev);
+		misc_deregister(&ma35_ecc_dev);
 	else {
-		crypto_unregister_kpp(&ma35d1_ecdh_p192);
-		crypto_unregister_kpp(&ma35d1_ecdh_p256);
-		crypto_unregister_kpp(&ma35d1_ecdh_p384);
+		crypto_unregister_kpp(&ma35_ecdh_p192);
+		crypto_unregister_kpp(&ma35_ecdh_p256);
+		crypto_unregister_kpp(&ma35_ecdh_p384);
 	}
 
 	spin_lock(&nu_ecc.lock);

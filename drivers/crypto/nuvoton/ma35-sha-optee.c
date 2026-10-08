@@ -27,8 +27,8 @@
 #include <crypto/internal/hash.h>
 #include <linux/unaligned.h>
 
-#include "ma35d1-crypto.h"
-#include "ma35d1-crypto-optee.h"
+#include "ma35-crypto.h"
+#include "ma35-crypto-optee.h"
 
 /* SHA device flags */
 #define DD_FLAGS_BUSY		BIT(0)
@@ -65,7 +65,7 @@ static const u8 sha3_512_empty[SHA3_512_DIGEST_SIZE] = {
 	0xf5, 0x00, 0x19, 0x9d, 0x95, 0xb6, 0xd3, 0xe3, 0x01, 0x75, 0x85, 0x86, 0x28, 0x1d, 0xcd, 0x26
 };
 
-static const u8 *ma35d1_sha3_empty_digest(unsigned int digest_len)
+static const u8 *ma35_sha3_empty_digest(unsigned int digest_len)
 {
 	switch (digest_len) {
 	case SHA3_224_DIGEST_SIZE: return sha3_224_empty;
@@ -87,7 +87,7 @@ static struct nu_sha_drv nu_sha = {
 	.lock = __SPIN_LOCK_UNLOCKED(nu_sha.lock),
 };
 
-static struct nu_sha_dev *ma35d1_sha_find_dev(struct nu_sha_ctx *tctx)
+static struct nu_sha_dev *ma35_sha_find_dev(struct nu_sha_ctx *tctx)
 {
 	struct nu_sha_dev *dd = NULL;
 	struct nu_sha_dev *tmp;
@@ -109,24 +109,24 @@ static struct nu_sha_dev *ma35d1_sha_find_dev(struct nu_sha_ctx *tctx)
 	return dd;
 }
 
-static inline void ma35d1_write_reg(struct nu_sha_dev *sha_dd, u32 val, u32 reg)
+static inline void ma35_write_reg(struct nu_sha_dev *sha_dd, u32 val, u32 reg)
 {
 	sha_dd->va_shm[reg/4] = val;
 }
 
-static inline u32 ma35d1_read_reg(struct nu_sha_dev *sha_dd, u32 reg)
+static inline u32 ma35_read_reg(struct nu_sha_dev *sha_dd, u32 reg)
 {
 	return sha_dd->va_shm[reg/4];
 }
 
-struct ma35d1_sha_tee_session {
+struct ma35_sha_tee_session {
 	struct list_head list;
 	u32 sid;
 	struct nu_sha_reqctx *ctx;
 	bool close_failed;
 };
 
-struct ma35d1_sha_optee_state {
+struct ma35_sha_optee_state {
 	struct nu_sha_dev *dd;
 	struct workqueue_struct *wq;
 	struct work_struct queue_work;
@@ -137,12 +137,12 @@ struct ma35d1_sha_optee_state {
 	bool dma_mapped;
 };
 
-static struct ma35d1_sha_optee_state sha_tee;
+static struct ma35_sha_optee_state sha_tee;
 
-static bool ma35d1_sha_tee_session_open(struct nu_sha_dev *dd,
+static bool ma35_sha_tee_session_open(struct nu_sha_dev *dd,
 				       struct nu_sha_reqctx *ctx)
 {
-	struct ma35d1_sha_tee_session *session;
+	struct ma35_sha_tee_session *session;
 
 	if (!(ctx->flags & SHA_FLAGS_TEE_SESSION))
 		return false;
@@ -154,11 +154,11 @@ static bool ma35d1_sha_tee_session_open(struct nu_sha_dev *dd,
 	return false;
 }
 
-static int ma35d1_sha_tee_close(struct nu_sha_dev *dd, u32 sid)
+static int ma35_sha_tee_close(struct nu_sha_dev *dd, u32 sid)
 {
 	struct tee_ioctl_invoke_arg arg = { };
 	struct tee_param param[4] = { };
-	struct ma35d1_sha_tee_session *session, *tmp;
+	struct ma35_sha_tee_session *session, *tmp;
 	int err;
 
 	list_for_each_entry(session, &sha_tee.sessions, list) {
@@ -183,7 +183,7 @@ static int ma35d1_sha_tee_close(struct nu_sha_dev *dd, u32 sid)
 			session->close_failed = true;
 			/* only a broken transport is fatal; a PTA error leaves other requests usable */
 			if (err < 0)
-				WRITE_ONCE(ma35d1_crypto_optee_faulted, true);
+				WRITE_ONCE(ma35_crypto_optee_faulted, true);
 			break;
 		}
 		list_del(&session->list);
@@ -193,31 +193,31 @@ static int ma35d1_sha_tee_close(struct nu_sha_dev *dd, u32 sid)
 	return err < 0 ? err : (arg.ret ? -EIO : 0);
 }
 
-static int ma35d1_sha_tee_retire(struct nu_sha_dev *dd,
+static int ma35_sha_tee_retire(struct nu_sha_dev *dd,
 				struct nu_sha_reqctx *ctx)
 {
-	struct ma35d1_sha_tee_session *session, *tmp;
+	struct ma35_sha_tee_session *session, *tmp;
 	int err;
 
 	list_for_each_entry_safe(session, tmp, &sha_tee.sessions, list) {
 		if (session->ctx != ctx)
 			continue;
-		err = ma35d1_sha_tee_close(dd, session->sid);
+		err = ma35_sha_tee_close(dd, session->sid);
 		if (err)
 			return err;
 	}
 	return 0;
 }
 
-static void ma35d1_sha_tee_close_all(struct nu_sha_dev *dd)
+static void ma35_sha_tee_close_all(struct nu_sha_dev *dd)
 {
-	struct ma35d1_sha_tee_session *session;
+	struct ma35_sha_tee_session *session;
 
 	while (!list_empty(&sha_tee.sessions)) {
 		session = list_first_entry(&sha_tee.sessions,
-					   struct ma35d1_sha_tee_session, list);
+					   struct ma35_sha_tee_session, list);
 		if (session->close_failed ||
-		    ma35d1_sha_tee_close(dd, session->sid)) {
+		    ma35_sha_tee_close(dd, session->sid)) {
 			dev_err(dd->dev,
 				"Unreleased SHA session %u; reboot required\n",
 				session->sid);
@@ -227,7 +227,7 @@ static void ma35d1_sha_tee_close_all(struct nu_sha_dev *dd)
 	}
 }
 
-static void ma35d1_sha_tee_unmap(struct nu_sha_dev *dd)
+static void ma35_sha_tee_unmap(struct nu_sha_dev *dd)
 {
 	struct nu_sha_reqctx *ctx = ahash_request_ctx(dd->req);
 	int size = ctx->flags & SHA_FLAGS_KEY_BLK ?
@@ -245,7 +245,7 @@ static void ma35d1_sha_tee_unmap(struct nu_sha_dev *dd)
  * TSI cannot run an HMAC with a zero-length message, but the result is well
  * defined: HMAC(key, "") . Compute it with the software implementation.
  */
-static int ma35d1_hmac_empty_msg(struct ahash_request *req, struct nu_sha_ctx *tctx)
+static int ma35_hmac_empty_msg(struct ahash_request *req, struct nu_sha_ctx *tctx)
 {
 	struct crypto_ahash *tfm = crypto_ahash_reqtfm(req);
 	struct crypto_shash *sh;
@@ -262,17 +262,17 @@ static int ma35d1_hmac_empty_msg(struct ahash_request *req, struct nu_sha_ctx *t
 	return err;
 }
 
-static int ma35d1_sha_dma_run(struct nu_sha_dev *dd, int is_key_block)
+static int ma35_sha_dma_run(struct nu_sha_dev *dd, int is_key_block)
 {
 	struct nu_sha_reqctx *ctx = ahash_request_ctx(dd->req);
 	struct nu_sha_ctx *tctx = crypto_tfm_ctx(dd->req->base.tfm);
 	struct tee_ioctl_invoke_arg inv_arg;
 	struct tee_param param[4];
-	struct ma35d1_sha_tee_session *session;
+	struct ma35_sha_tee_session *session;
 	int  dma_cnt = 0;
 	int  err;
 
-	if (READ_ONCE(ma35d1_crypto_optee_faulted))
+	if (READ_ONCE(ma35_crypto_optee_faulted))
 		return -EIO;
 	sha_tee.dma_mapped = false;
 	dma_cnt = 0;
@@ -313,7 +313,7 @@ static int ma35d1_sha_dma_run(struct nu_sha_dev *dd, int is_key_block)
 	ctx->reg_ctl |= ctx->op; /* HMAC/SHA3/SM3/MD5 */
 
 	if (ctx->flags & SHA_FLAGS_FIRST) {
-		err = ma35d1_sha_tee_retire(dd, ctx);
+		err = ma35_sha_tee_retire(dd, ctx);
 		if (err)
 			goto tee_error;
 		session = kzalloc(sizeof(*session), GFP_KERNEL);
@@ -342,16 +342,16 @@ static int ma35d1_sha_dma_run(struct nu_sha_dev *dd, int is_key_block)
 	pr_debug("Write HMAC_CTL = 0x%x, dma_cnt = %d, key_len = %d/%d\n",
 		 ctx->reg_ctl, dma_cnt, tctx->hmac_key_len, ctx->block_size);
 
-	ma35d1_write_reg(dd, 0, HMAC_KSCTL);
+	ma35_write_reg(dd, 0, HMAC_KSCTL);
 
-	ma35d1_write_reg(dd, (INTSTS_HMACIF | INTSTS_HMACEIF), INTSTS);
-	ma35d1_write_reg(dd, ma35d1_read_reg(dd, INTEN) | (INTEN_HMACIEN | INTEN_HMACEIEN), INTEN);
+	ma35_write_reg(dd, (INTSTS_HMACIF | INTSTS_HMACEIF), INTSTS);
+	ma35_write_reg(dd, ma35_read_reg(dd, INTEN) | (INTEN_HMACIEN | INTEN_HMACEIEN), INTEN);
 
-	ma35d1_write_reg(dd, tctx->hmac_key_len, HMAC_KEYCNT);
-	ma35d1_write_reg(dd, dma_cnt, HMAC_DMACNT);
-	ma35d1_write_reg(dd, ctx->dma_buff, HMAC_SADDR);
-	ma35d1_write_reg(dd, ctx->dma_fdbck, HMAC_FBADDR);
-	ma35d1_write_reg(dd, ctx->reg_ctl, HMAC_CTL);
+	ma35_write_reg(dd, tctx->hmac_key_len, HMAC_KEYCNT);
+	ma35_write_reg(dd, dma_cnt, HMAC_DMACNT);
+	ma35_write_reg(dd, ctx->dma_buff, HMAC_SADDR);
+	ma35_write_reg(dd, ctx->dma_fdbck, HMAC_FBADDR);
+	ma35_write_reg(dd, ctx->reg_ctl, HMAC_CTL);
 
 	/*--------------------------------------------------------------*/
 	/*  Invoke OP-TEE Crypto PTA to run SHA                         */
@@ -380,7 +380,7 @@ static int ma35d1_sha_dma_run(struct nu_sha_dev *dd, int is_key_block)
 				"SHA open failed: transport=%d PTA=%#x\n",
 				err, inv_arg.ret);
 			if (err < 0)
-				WRITE_ONCE(ma35d1_crypto_optee_faulted, true);
+				WRITE_ONCE(ma35_crypto_optee_faulted, true);
 			kfree(session);
 			err = err < 0 ? err : -EIO;
 			goto tee_error;
@@ -456,7 +456,7 @@ static int ma35d1_sha_dma_run(struct nu_sha_dev *dd, int is_key_block)
 	}
 
 	if (ctx->flags & SHA_FLAGS_FINAL_DMA) {
-		err = ma35d1_sha_tee_close(dd, ctx->tsi_sid);
+		err = ma35_sha_tee_close(dd, ctx->tsi_sid);
 		ctx->flags &= ~SHA_FLAGS_TEE_SESSION;
 		if (err)
 			goto tee_error;
@@ -467,14 +467,14 @@ static int ma35d1_sha_dma_run(struct nu_sha_dev *dd, int is_key_block)
 	return -EINPROGRESS;
 
 tee_error:
-	ma35d1_sha_tee_unmap(dd);
+	ma35_sha_tee_unmap(dd);
 	return err;
 }
 
 /*
  *  The whole SHA operation is finished. Get the digest result from SHA engine.
  */
-static void  ma35d1_sha_get_result(struct ahash_request *req)
+static void  ma35_sha_get_result(struct ahash_request *req)
 {
 	struct nu_sha_reqctx *ctx = ahash_request_ctx(req);
 	u8 *result = req->result;
@@ -484,27 +484,27 @@ static void  ma35d1_sha_get_result(struct ahash_request *req)
 		return;
 
 	if (ctx->flags & SHA_FLAGS_EMPTY_SHA3) {
-		memcpy(result, ma35d1_sha3_empty_digest(ctx->digest_len), ctx->digest_len);
+		memcpy(result, ma35_sha3_empty_digest(ctx->digest_len), ctx->digest_len);
 		return;
 	}
 
 	/* Get the hash from the digest buffer */
 	for (i = 0; i < ctx->digest_len/4; i++)
-		put_unaligned(ma35d1_read_reg(ctx->dd, HMAC_DGST(i)),
+		put_unaligned(ma35_read_reg(ctx->dd, HMAC_DGST(i)),
 			      (u32 *)(result + i * sizeof(u32)));
 }
 
 /*
  *  A request is completed(err is 0) or aborted(err < 0).
  */
-static void ma35d1_sha_finish_req(struct nu_sha_reqctx *ctx, int err)
+static void ma35_sha_finish_req(struct nu_sha_reqctx *ctx, int err)
 {
 	struct nu_sha_dev *dd = ctx->dd;
 	struct ahash_request *req = dd->req;
 	unsigned long flags;
 
-	if (err && ma35d1_sha_tee_session_open(dd, ctx))
-		ma35d1_sha_tee_close(dd, ctx->tsi_sid);
+	if (err && ma35_sha_tee_session_open(dd, ctx))
+		ma35_sha_tee_close(dd, ctx->tsi_sid);
 	if (err)
 		ctx->flags &= ~SHA_FLAGS_TEE_SESSION;
 
@@ -513,7 +513,7 @@ static void ma35d1_sha_finish_req(struct nu_sha_reqctx *ctx, int err)
 	 */
 	if (err || (ctx->flags & SHA_FLAGS_FINAL_DMA)) {
 		if (!err)
-			ma35d1_sha_get_result(req);
+			ma35_sha_get_result(req);
 		kfree(ctx->buffer);
 		ctx->buffer = NULL;
 		ctx->bufcnt = 0;
@@ -528,18 +528,18 @@ static void ma35d1_sha_finish_req(struct nu_sha_reqctx *ctx, int err)
 	queue_work(sha_tee.wq, &sha_tee.queue_work);
 }
 
-static int ma35d1_sha_init(struct ahash_request *req)
+static int ma35_sha_init(struct ahash_request *req)
 {
 	struct crypto_ahash *tfm = crypto_ahash_reqtfm(req);
 	struct nu_sha_ctx *tctx = crypto_ahash_ctx(tfm);
 	struct nu_sha_reqctx *ctx = ahash_request_ctx(req);
-	struct nu_sha_dev *dd = ma35d1_sha_find_dev(tctx);
+	struct nu_sha_dev *dd = ma35_sha_find_dev(tctx);
 	struct hash_alg_common *halg = crypto_hash_alg_common(tfm);
 	char *cra_name = halg->base.cra_name;
 	bool is_sha3 = false;
 	gfp_t gfp;
 
-	if (dd && READ_ONCE(ma35d1_crypto_optee_faulted))
+	if (dd && READ_ONCE(ma35_crypto_optee_faulted))
 		return -EIO;
 	ctx->op = 0;
 	if (strncmp(cra_name, "hmac", 4) == 0) {
@@ -640,7 +640,7 @@ static int ma35d1_sha_init(struct ahash_request *req)
 	return 0;
 }
 
-static void ma35d1_sha_sg_to_dma_buffer(struct ahash_request *req, struct nu_sha_reqctx *ctx)
+static void ma35_sha_sg_to_dma_buffer(struct ahash_request *req, struct nu_sha_reqctx *ctx)
 {
 	int copy_len;
 
@@ -664,44 +664,44 @@ static void ma35d1_sha_sg_to_dma_buffer(struct ahash_request *req, struct nu_sha
 	}
 }
 
-static int ma35d1_sha_update_start(struct nu_sha_dev *dd)
+static int ma35_sha_update_start(struct nu_sha_dev *dd)
 {
 	struct nu_sha_reqctx *ctx = ahash_request_ctx(dd->req);
 	int err = 0;
 
-	if (READ_ONCE(ma35d1_crypto_optee_faulted) ||
+	if (READ_ONCE(ma35_crypto_optee_faulted) ||
 	    (!(ctx->flags & SHA_FLAGS_FIRST) &&
-	     !ma35d1_sha_tee_session_open(dd, ctx))) {
-		ma35d1_sha_finish_req(ctx, -EIO);
+	     !ma35_sha_tee_session_open(dd, ctx))) {
+		ma35_sha_finish_req(ctx, -EIO);
 		return -EIO;
 	}
 	if ((ctx->req_len > 0) &&  (ctx->bufcnt < ctx->dma_max_size))
-		ma35d1_sha_sg_to_dma_buffer(dd->req, ctx);
+		ma35_sha_sg_to_dma_buffer(dd->req, ctx);
 
 	if ((ctx->op & HMAC_CTL_SHA3EN) && !(ctx->op & HMAC_CTL_HMACEN) &&
 	    (ctx->flags & SHA_FLAGS_FIRST) &&
 	    (ctx->flags & (SHA_FLAGS_FINUP | SHA_FLAGS_FINAL)) &&
 	    ctx->bufcnt == 0 && ctx->req_len == 0 &&
-	    ma35d1_sha3_empty_digest(ctx->digest_len)) {
+	    ma35_sha3_empty_digest(ctx->digest_len)) {
 		/* TSI fails on zero-length SHA3, and the failure disables all of TSI */
 		ctx->flags |= SHA_FLAGS_EMPTY_SHA3 | SHA_FLAGS_FINAL_DMA;
-		ma35d1_sha_finish_req(ctx, 0);
+		ma35_sha_finish_req(ctx, 0);
 		return 0;
 	}
 
 	if (ctx->flags & SHA_FLAGS_KEY_BLK) {
 		if ((ctx->flags & (SHA_FLAGS_FINUP | SHA_FLAGS_FINAL)) &&
 		    (ctx->bufcnt == 0) && (dd->req->nbytes == 0)) {
-			err = ma35d1_hmac_empty_msg(dd->req, crypto_tfm_ctx(dd->req->base.tfm));
+			err = ma35_hmac_empty_msg(dd->req, crypto_tfm_ctx(dd->req->base.tfm));
 			if (!err)
 				ctx->flags |= SHA_FLAGS_EMPTY_HMAC | SHA_FLAGS_FINAL_DMA;
-			ma35d1_sha_finish_req(ctx, err);
+			ma35_sha_finish_req(ctx, err);
 			return err;
 		}
 
-		err = ma35d1_sha_dma_run(dd, 1);
+		err = ma35_sha_dma_run(dd, 1);
 		if (err != -EINPROGRESS)
-			ma35d1_sha_finish_req(ctx, err); /* DMA trigger failed, abort! */
+			ma35_sha_finish_req(ctx, err); /* DMA trigger failed, abort! */
 
 	} else if (ctx->bufcnt == ctx->dma_max_size) {
 		/*
@@ -712,9 +712,9 @@ static int ma35d1_sha_update_start(struct nu_sha_dev *dd)
 		if ((ctx->flags & (SHA_FLAGS_FINUP | SHA_FLAGS_FINAL)) && (ctx->req_len == 0))
 			ctx->flags |= SHA_FLAGS_FINAL_DMA;
 
-		err = ma35d1_sha_dma_run(dd, 0);
+		err = ma35_sha_dma_run(dd, 0);
 		if (err != -EINPROGRESS)
-			ma35d1_sha_finish_req(ctx, err); /* DMA trigger failed, abort! */
+			ma35_sha_finish_req(ctx, err); /* DMA trigger failed, abort! */
 
 	} else if (ctx->flags & (SHA_FLAGS_FINUP | SHA_FLAGS_FINAL)) {
 		/*
@@ -725,22 +725,22 @@ static int ma35d1_sha_update_start(struct nu_sha_dev *dd)
 
 		ctx->flags |= SHA_FLAGS_FINAL_DMA;
 
-		err = ma35d1_sha_dma_run(dd, 0);
+		err = ma35_sha_dma_run(dd, 0);
 		if (err != -EINPROGRESS)
-			ma35d1_sha_finish_req(ctx, err); /* DMA trigger failed, abort! */
+			ma35_sha_finish_req(ctx, err); /* DMA trigger failed, abort! */
 
 	} else {
 		/*
 		 * All data of this request were copy to DMA buffer.
 		 * We can finish this request.
 		 */
-		ma35d1_sha_finish_req(ctx, 0);
+		ma35_sha_finish_req(ctx, 0);
 		err = 0;
 	}
 	return err;
 }
 
-static int ma35d1_sha_handle_queue(struct nu_sha_dev *dd, struct ahash_request *req)
+static int ma35_sha_handle_queue(struct nu_sha_dev *dd, struct ahash_request *req)
 {
 	struct crypto_async_request *async_req, *backlog;
 	unsigned long flags;
@@ -753,7 +753,7 @@ static int ma35d1_sha_handle_queue(struct nu_sha_dev *dd, struct ahash_request *
 			spin_unlock_irqrestore(&dd->lock, flags);
 			return -ESHUTDOWN;
 		}
-		if (READ_ONCE(ma35d1_crypto_optee_faulted)) {
+		if (READ_ONCE(ma35_crypto_optee_faulted)) {
 			spin_unlock_irqrestore(&dd->lock, flags);
 			return -EIO;
 		}
@@ -786,10 +786,10 @@ static int ma35d1_sha_handle_queue(struct nu_sha_dev *dd, struct ahash_request *
 	req = ahash_request_cast(async_req);
 	dd->req = req;
 
-	return ma35d1_sha_update_start(dd);
+	return ma35_sha_update_start(dd);
 }
 
-static void ma35d1_sha_dma_complete(struct nu_sha_reqctx *ctx)
+static void ma35_sha_dma_complete(struct nu_sha_reqctx *ctx)
 {
 	struct nu_sha_dev *dd = ctx->dd;
 
@@ -797,7 +797,7 @@ static void ma35d1_sha_dma_complete(struct nu_sha_reqctx *ctx)
 
 	if (ctx->flags & SHA_FLAGS_KEY_BLK) {
 		ctx->flags &= ~SHA_FLAGS_KEY_BLK;
-		ma35d1_sha_update_start(dd);
+		ma35_sha_update_start(dd);
 		return;
 	}
 
@@ -805,14 +805,14 @@ static void ma35d1_sha_dma_complete(struct nu_sha_reqctx *ctx)
 
 	if (ctx->req_len == 0) {
 		/* the current request H/W processing done */
-		ma35d1_sha_finish_req(ctx, 0);
+		ma35_sha_finish_req(ctx, 0);
 		return;
 	}
 
-	ma35d1_sha_update_start(dd);
+	ma35_sha_update_start(dd);
 }
 
-static int ma35d1_sha_update(struct ahash_request *req)
+static int ma35_sha_update(struct ahash_request *req)
 {
 	struct nu_sha_reqctx *ctx = ahash_request_ctx(req);
 
@@ -820,29 +820,29 @@ static int ma35d1_sha_update(struct ahash_request *req)
 	ctx->sg_off = 0;
 	ctx->req_len = req->nbytes;
 
-	ma35d1_sha_sg_to_dma_buffer(req, ctx);
+	ma35_sha_sg_to_dma_buffer(req, ctx);
 	if (ctx->bufcnt + ctx->req_len <= ctx->dma_max_size)
 		return 0;
-	return ma35d1_sha_handle_queue(ctx->dd, req);
+	return ma35_sha_handle_queue(ctx->dd, req);
 }
 
-static int ma35d1_sha_final(struct ahash_request *req)
+static int ma35_sha_final(struct ahash_request *req)
 {
 	struct nu_sha_reqctx *ctx = ahash_request_ctx(req);
 
 	ctx->flags |= SHA_FLAGS_FINAL;
 
-	return ma35d1_sha_handle_queue(ctx->dd, req);
+	return ma35_sha_handle_queue(ctx->dd, req);
 }
 
-static int ma35d1_sha_finup(struct ahash_request *req)
+static int ma35_sha_finup(struct ahash_request *req)
 {
 	struct nu_sha_reqctx *ctx = ahash_request_ctx(req);
 	int err1, err2;
 
 	ctx->flags |= SHA_FLAGS_FINUP;
 
-	err1 = ma35d1_sha_update(req);
+	err1 = ma35_sha_update(req);
 	if (err1 == -EINPROGRESS || (err1 == -EBUSY &&
 	    (ahash_request_flags(req) & CRYPTO_TFM_REQ_MAY_BACKLOG)))
 		return err1;
@@ -851,17 +851,17 @@ static int ma35d1_sha_finup(struct ahash_request *req)
 	 * final() has to be always called to cleanup resources
 	 * even if update() failed, except EINPROGRESS
 	 */
-	err2 = ma35d1_sha_final(req);
+	err2 = ma35_sha_final(req);
 
 	return err1 ?: err2;
 }
 
-static int ma35d1_sha_digest(struct ahash_request *req)
+static int ma35_sha_digest(struct ahash_request *req)
 {
-	return ma35d1_sha_init(req) ?: ma35d1_sha_finup(req);
+	return ma35_sha_init(req) ?: ma35_sha_finup(req);
 }
 
-static int ma35d1_sha_setkey(struct crypto_ahash *tfm, const u8 *key, u32 keylen)
+static int ma35_sha_setkey(struct crypto_ahash *tfm, const u8 *key, u32 keylen)
 {
 	struct nu_sha_ctx *tctx = crypto_ahash_ctx(tfm);
 	unsigned int block_size = crypto_ahash_blocksize(tfm);
@@ -881,22 +881,22 @@ static int ma35d1_sha_setkey(struct crypto_ahash *tfm, const u8 *key, u32 keylen
 	return 0;
 }
 
-static int ma35d1_sha_export(struct ahash_request *req, void *out)
+static int ma35_sha_export(struct ahash_request *req, void *out)
 {
 	return -EOPNOTSUPP;
 }
 
-static int ma35d1_sha_import(struct ahash_request *req, const void *in)
+static int ma35_sha_import(struct ahash_request *req, const void *in)
 {
 	return -EOPNOTSUPP;
 }
 
-static int ma35d1_sha_cra_init_alg(struct crypto_tfm *tfm, const char *alg_base)
+static int ma35_sha_cra_init_alg(struct crypto_tfm *tfm, const char *alg_base)
 {
 	struct nu_sha_ctx *tctx = crypto_tfm_ctx(tfm);
-	struct nu_sha_dev *dd = ma35d1_sha_find_dev(tctx);
+	struct nu_sha_dev *dd = ma35_sha_find_dev(tctx);
 
-	dd = ma35d1_sha_find_dev(tctx);
+	dd = ma35_sha_find_dev(tctx);
 	if (!dd)
 		return -ENODEV;
 
@@ -904,391 +904,391 @@ static int ma35d1_sha_cra_init_alg(struct crypto_tfm *tfm, const char *alg_base)
 	return 0;
 }
 
-static int ma35d1_sha_cra_init(struct crypto_tfm *tfm)
+static int ma35_sha_cra_init(struct crypto_tfm *tfm)
 {
 	// printk("SHA: %s\n", tfm->__crt_alg->cra_driver_name);
-	return ma35d1_sha_cra_init_alg(tfm, NULL);
+	return ma35_sha_cra_init_alg(tfm, NULL);
 }
 
-static void ma35d1_sha_cra_exit(struct crypto_tfm *tfm)
+static void ma35_sha_cra_exit(struct crypto_tfm *tfm)
 {
 }
 
-static struct ahash_alg  ma35d1_sha_algs[] = {
+static struct ahash_alg  ma35_sha_algs[] = {
 {
-	.init   = ma35d1_sha_init,
-	.update = ma35d1_sha_update,
-	.final  = ma35d1_sha_final,
-	.finup  = ma35d1_sha_finup,
-	.digest = ma35d1_sha_digest,
-	.export = ma35d1_sha_export,
-	.import = ma35d1_sha_import,
+	.init   = ma35_sha_init,
+	.update = ma35_sha_update,
+	.final  = ma35_sha_final,
+	.finup  = ma35_sha_finup,
+	.digest = ma35_sha_digest,
+	.export = ma35_sha_export,
+	.import = ma35_sha_import,
 	.halg.digestsize = SHA1_DIGEST_SIZE,
 	.halg.statesize = sizeof(struct nu_sha_reqctx),
 	.halg.base = {
 		.cra_name        = "sha1",
-		.cra_driver_name = "ma35d1-optee-sha1",
-		.cra_priority    = 400,
+		.cra_driver_name = "ma35-optee-sha1",
+		.cra_priority    = MA35_CRA_PRIORITY,
 		.cra_flags       = CRYPTO_ALG_ASYNC,
 		.cra_blocksize   = SHA1_BLOCK_SIZE,
 		.cra_ctxsize     = sizeof(struct nu_sha_ctx),
 		.cra_alignmask   = 0,
 		.cra_module      = THIS_MODULE,
-		.cra_init        = ma35d1_sha_cra_init,
-		.cra_exit        = ma35d1_sha_cra_exit,
+		.cra_init        = ma35_sha_cra_init,
+		.cra_exit        = ma35_sha_cra_exit,
 	}
 },
 {
-	.init   = ma35d1_sha_init,
-	.update = ma35d1_sha_update,
-	.final  = ma35d1_sha_final,
-	.finup  = ma35d1_sha_finup,
-	.digest = ma35d1_sha_digest,
-	.export = ma35d1_sha_export,
-	.import = ma35d1_sha_import,
+	.init   = ma35_sha_init,
+	.update = ma35_sha_update,
+	.final  = ma35_sha_final,
+	.finup  = ma35_sha_finup,
+	.digest = ma35_sha_digest,
+	.export = ma35_sha_export,
+	.import = ma35_sha_import,
 	.halg.digestsize = SHA224_DIGEST_SIZE,
 	.halg.statesize = sizeof(struct nu_sha_reqctx),
 	.halg.base = {
 		.cra_name        = "sha224",
-		.cra_driver_name = "ma35d1-optee-sha224",
-		.cra_priority    = 400,
+		.cra_driver_name = "ma35-optee-sha224",
+		.cra_priority    = MA35_CRA_PRIORITY,
 		.cra_flags       = CRYPTO_ALG_ASYNC,
 		.cra_blocksize   = SHA224_BLOCK_SIZE,
 		.cra_ctxsize     = sizeof(struct nu_sha_ctx),
 		.cra_alignmask   = 0,
 		.cra_module      = THIS_MODULE,
-		.cra_init        = ma35d1_sha_cra_init,
-		.cra_exit        = ma35d1_sha_cra_exit,
+		.cra_init        = ma35_sha_cra_init,
+		.cra_exit        = ma35_sha_cra_exit,
 	}
 },
 {
-	.init   = ma35d1_sha_init,
-	.update = ma35d1_sha_update,
-	.final  = ma35d1_sha_final,
-	.finup  = ma35d1_sha_finup,
-	.digest = ma35d1_sha_digest,
-	.export = ma35d1_sha_export,
-	.import = ma35d1_sha_import,
+	.init   = ma35_sha_init,
+	.update = ma35_sha_update,
+	.final  = ma35_sha_final,
+	.finup  = ma35_sha_finup,
+	.digest = ma35_sha_digest,
+	.export = ma35_sha_export,
+	.import = ma35_sha_import,
 	.halg.digestsize = SHA256_DIGEST_SIZE,
 	.halg.statesize = sizeof(struct nu_sha_reqctx),
 	.halg.base = {
 		.cra_name        = "sha256",
-		.cra_driver_name = "ma35d1-optee-sha256",
-		.cra_priority    = 400,
+		.cra_driver_name = "ma35-optee-sha256",
+		.cra_priority    = MA35_CRA_PRIORITY,
 		.cra_flags       = CRYPTO_ALG_ASYNC,
 		.cra_blocksize   = SHA256_BLOCK_SIZE,
 		.cra_ctxsize     = sizeof(struct nu_sha_ctx),
 		.cra_alignmask   = 0,
 		.cra_module      = THIS_MODULE,
-		.cra_init        = ma35d1_sha_cra_init,
-		.cra_exit        = ma35d1_sha_cra_exit,
+		.cra_init        = ma35_sha_cra_init,
+		.cra_exit        = ma35_sha_cra_exit,
 	}
 },
 {
-	.init   = ma35d1_sha_init,
-	.update = ma35d1_sha_update,
-	.final  = ma35d1_sha_final,
-	.finup  = ma35d1_sha_finup,
-	.digest = ma35d1_sha_digest,
-	.export = ma35d1_sha_export,
-	.import = ma35d1_sha_import,
+	.init   = ma35_sha_init,
+	.update = ma35_sha_update,
+	.final  = ma35_sha_final,
+	.finup  = ma35_sha_finup,
+	.digest = ma35_sha_digest,
+	.export = ma35_sha_export,
+	.import = ma35_sha_import,
 	.halg.digestsize = SHA384_DIGEST_SIZE,
 	.halg.statesize = sizeof(struct nu_sha_reqctx),
 	.halg.base = {
 		.cra_name        = "sha384",
-		.cra_driver_name = "ma35d1-optee-sha384",
-		.cra_priority    = 400,
+		.cra_driver_name = "ma35-optee-sha384",
+		.cra_priority    = MA35_CRA_PRIORITY,
 		.cra_flags       = CRYPTO_ALG_ASYNC,
 		.cra_blocksize   = SHA384_BLOCK_SIZE,
 		.cra_ctxsize     = sizeof(struct nu_sha_ctx),
 		.cra_alignmask   = 0,
 		.cra_module      = THIS_MODULE,
-		.cra_init        = ma35d1_sha_cra_init,
-		.cra_exit        = ma35d1_sha_cra_exit,
+		.cra_init        = ma35_sha_cra_init,
+		.cra_exit        = ma35_sha_cra_exit,
 	}
 },
 {
-	.init   = ma35d1_sha_init,
-	.update = ma35d1_sha_update,
-	.final  = ma35d1_sha_final,
-	.finup  = ma35d1_sha_finup,
-	.digest = ma35d1_sha_digest,
-	.export = ma35d1_sha_export,
-	.import = ma35d1_sha_import,
+	.init   = ma35_sha_init,
+	.update = ma35_sha_update,
+	.final  = ma35_sha_final,
+	.finup  = ma35_sha_finup,
+	.digest = ma35_sha_digest,
+	.export = ma35_sha_export,
+	.import = ma35_sha_import,
 	.halg.digestsize = SHA512_DIGEST_SIZE,
 	.halg.statesize = sizeof(struct nu_sha_reqctx),
 	.halg.base = {
 		.cra_name        = "sha512",
-		.cra_driver_name = "ma35d1-optee-sha512",
-		.cra_priority    = 400,
+		.cra_driver_name = "ma35-optee-sha512",
+		.cra_priority    = MA35_CRA_PRIORITY,
 		.cra_flags       = CRYPTO_ALG_ASYNC,
 		.cra_blocksize   = SHA512_BLOCK_SIZE,
 		.cra_ctxsize     = sizeof(struct nu_sha_ctx),
 		.cra_alignmask   = 0,
 		.cra_module      = THIS_MODULE,
-		.cra_init        = ma35d1_sha_cra_init,
-		.cra_exit        = ma35d1_sha_cra_exit,
+		.cra_init        = ma35_sha_cra_init,
+		.cra_exit        = ma35_sha_cra_exit,
 	}
 },
 {
-	.init   = ma35d1_sha_init,
-	.update = ma35d1_sha_update,
-	.final  = ma35d1_sha_final,
-	.finup  = ma35d1_sha_finup,
-	.digest = ma35d1_sha_digest,
-	.export = ma35d1_sha_export,
-	.import = ma35d1_sha_import,
-	.setkey = ma35d1_sha_setkey,
+	.init   = ma35_sha_init,
+	.update = ma35_sha_update,
+	.final  = ma35_sha_final,
+	.finup  = ma35_sha_finup,
+	.digest = ma35_sha_digest,
+	.export = ma35_sha_export,
+	.import = ma35_sha_import,
+	.setkey = ma35_sha_setkey,
 	.halg.digestsize = SHA1_DIGEST_SIZE,
 	.halg.statesize = sizeof(struct nu_sha_reqctx),
 	.halg.base = {
 		.cra_name        = "hmac(sha1)",
-		.cra_driver_name = "ma35d1-optee-hmac-sha1",
-		.cra_priority    = 400,
+		.cra_driver_name = "ma35-optee-hmac-sha1",
+		.cra_priority    = MA35_CRA_PRIORITY,
 		.cra_flags       = CRYPTO_ALG_ASYNC,
 		.cra_blocksize   = SHA1_BLOCK_SIZE,
 		.cra_ctxsize     = sizeof(struct nu_sha_ctx),
 		.cra_alignmask   = 0,
 		.cra_module      = THIS_MODULE,
-		.cra_init        = ma35d1_sha_cra_init,
-		.cra_exit        = ma35d1_sha_cra_exit,
+		.cra_init        = ma35_sha_cra_init,
+		.cra_exit        = ma35_sha_cra_exit,
 	}
 },
 {
-	.init   = ma35d1_sha_init,
-	.update = ma35d1_sha_update,
-	.final  = ma35d1_sha_final,
-	.finup  = ma35d1_sha_finup,
-	.digest = ma35d1_sha_digest,
-	.export = ma35d1_sha_export,
-	.import = ma35d1_sha_import,
-	.setkey = ma35d1_sha_setkey,
+	.init   = ma35_sha_init,
+	.update = ma35_sha_update,
+	.final  = ma35_sha_final,
+	.finup  = ma35_sha_finup,
+	.digest = ma35_sha_digest,
+	.export = ma35_sha_export,
+	.import = ma35_sha_import,
+	.setkey = ma35_sha_setkey,
 	.halg.digestsize = SHA224_DIGEST_SIZE,
 	.halg.statesize = sizeof(struct nu_sha_reqctx),
 	.halg.base = {
 		.cra_name        = "hmac(sha224)",
-		.cra_driver_name = "ma35d1-optee-hmac-sha224",
-		.cra_priority    = 400,
+		.cra_driver_name = "ma35-optee-hmac-sha224",
+		.cra_priority    = MA35_CRA_PRIORITY,
 		.cra_flags       = CRYPTO_ALG_ASYNC,
 		.cra_blocksize   = SHA224_BLOCK_SIZE,
 		.cra_ctxsize     = sizeof(struct nu_sha_ctx),
 		.cra_alignmask   = 0,
 		.cra_module      = THIS_MODULE,
-		.cra_init        = ma35d1_sha_cra_init,
-		.cra_exit        = ma35d1_sha_cra_exit,
+		.cra_init        = ma35_sha_cra_init,
+		.cra_exit        = ma35_sha_cra_exit,
 	}
 },
 {
-	.init   = ma35d1_sha_init,
-	.update = ma35d1_sha_update,
-	.final  = ma35d1_sha_final,
-	.finup  = ma35d1_sha_finup,
-	.digest = ma35d1_sha_digest,
-	.export = ma35d1_sha_export,
-	.import = ma35d1_sha_import,
-	.setkey = ma35d1_sha_setkey,
+	.init   = ma35_sha_init,
+	.update = ma35_sha_update,
+	.final  = ma35_sha_final,
+	.finup  = ma35_sha_finup,
+	.digest = ma35_sha_digest,
+	.export = ma35_sha_export,
+	.import = ma35_sha_import,
+	.setkey = ma35_sha_setkey,
 	.halg.digestsize = SHA256_DIGEST_SIZE,
 	.halg.statesize = sizeof(struct nu_sha_reqctx),
 	.halg.base = {
 		.cra_name        = "hmac(sha256)",
-		.cra_driver_name = "ma35d1-optee-hmac-sha256",
-		.cra_priority    = 400,
+		.cra_driver_name = "ma35-optee-hmac-sha256",
+		.cra_priority    = MA35_CRA_PRIORITY,
 		.cra_flags       = CRYPTO_ALG_ASYNC,
 		.cra_blocksize   = SHA256_BLOCK_SIZE,
 		.cra_ctxsize     = sizeof(struct nu_sha_ctx),
 		.cra_alignmask   = 0,
 		.cra_module      = THIS_MODULE,
-		.cra_init        = ma35d1_sha_cra_init,
-		.cra_exit        = ma35d1_sha_cra_exit,
+		.cra_init        = ma35_sha_cra_init,
+		.cra_exit        = ma35_sha_cra_exit,
 	}
 },
 {
-	.init   = ma35d1_sha_init,
-	.update = ma35d1_sha_update,
-	.final  = ma35d1_sha_final,
-	.finup  = ma35d1_sha_finup,
-	.digest = ma35d1_sha_digest,
-	.export = ma35d1_sha_export,
-	.import = ma35d1_sha_import,
-	.setkey = ma35d1_sha_setkey,
+	.init   = ma35_sha_init,
+	.update = ma35_sha_update,
+	.final  = ma35_sha_final,
+	.finup  = ma35_sha_finup,
+	.digest = ma35_sha_digest,
+	.export = ma35_sha_export,
+	.import = ma35_sha_import,
+	.setkey = ma35_sha_setkey,
 	.halg.digestsize = SHA384_DIGEST_SIZE,
 	.halg.statesize = sizeof(struct nu_sha_reqctx),
 	.halg.base = {
 		.cra_name        = "hmac(sha384)",
-		.cra_driver_name = "ma35d1-optee-hmac-sha384",
-		.cra_priority    = 400,
+		.cra_driver_name = "ma35-optee-hmac-sha384",
+		.cra_priority    = MA35_CRA_PRIORITY,
 		.cra_flags       = CRYPTO_ALG_ASYNC,
 		.cra_blocksize   = SHA384_BLOCK_SIZE,
 		.cra_ctxsize     = sizeof(struct nu_sha_ctx),
 		.cra_alignmask   = 0,
 		.cra_module      = THIS_MODULE,
-		.cra_init        = ma35d1_sha_cra_init,
-		.cra_exit        = ma35d1_sha_cra_exit,
+		.cra_init        = ma35_sha_cra_init,
+		.cra_exit        = ma35_sha_cra_exit,
 	}
 },
 {
-	.init   = ma35d1_sha_init,
-	.update = ma35d1_sha_update,
-	.final  = ma35d1_sha_final,
-	.finup  = ma35d1_sha_finup,
-	.digest = ma35d1_sha_digest,
-	.export = ma35d1_sha_export,
-	.import = ma35d1_sha_import,
-	.setkey = ma35d1_sha_setkey,
+	.init   = ma35_sha_init,
+	.update = ma35_sha_update,
+	.final  = ma35_sha_final,
+	.finup  = ma35_sha_finup,
+	.digest = ma35_sha_digest,
+	.export = ma35_sha_export,
+	.import = ma35_sha_import,
+	.setkey = ma35_sha_setkey,
 	.halg.digestsize = SHA512_DIGEST_SIZE,
 	.halg.statesize = sizeof(struct nu_sha_reqctx),
 	.halg.base = {
 		.cra_name        = "hmac(sha512)",
-		.cra_driver_name = "ma35d1-optee-hmac-sha512",
-		.cra_priority    = 400,
+		.cra_driver_name = "ma35-optee-hmac-sha512",
+		.cra_priority    = MA35_CRA_PRIORITY,
 		.cra_flags       = CRYPTO_ALG_ASYNC,
 		.cra_blocksize   = SHA512_BLOCK_SIZE,
 		.cra_ctxsize     = sizeof(struct nu_sha_ctx),
 		.cra_alignmask   = 0,
 		.cra_module      = THIS_MODULE,
-		.cra_init        = ma35d1_sha_cra_init,
-		.cra_exit        = ma35d1_sha_cra_exit,
+		.cra_init        = ma35_sha_cra_init,
+		.cra_exit        = ma35_sha_cra_exit,
 	}
 },
 {
-	.init   = ma35d1_sha_init,
-	.update = ma35d1_sha_update,
-	.final  = ma35d1_sha_final,
-	.finup  = ma35d1_sha_finup,
-	.digest = ma35d1_sha_digest,
-	.export = ma35d1_sha_export,
-	.import = ma35d1_sha_import,
+	.init   = ma35_sha_init,
+	.update = ma35_sha_update,
+	.final  = ma35_sha_final,
+	.finup  = ma35_sha_finup,
+	.digest = ma35_sha_digest,
+	.export = ma35_sha_export,
+	.import = ma35_sha_import,
 	.halg.digestsize = SM3_DIGEST_SIZE,
 	.halg.statesize = sizeof(struct nu_sha_reqctx),
 	.halg.base = {
 		.cra_name        = "sm3",
-		.cra_driver_name = "ma35d1-optee-sm3",
-		.cra_priority    = 400,
+		.cra_driver_name = "ma35-optee-sm3",
+		.cra_priority    = MA35_CRA_PRIORITY,
 		.cra_flags       = CRYPTO_ALG_ASYNC,
 		.cra_blocksize   = SM3_BLOCK_SIZE,
 		.cra_ctxsize     = sizeof(struct nu_sha_ctx),
 		.cra_alignmask   = 0,
 		.cra_module      = THIS_MODULE,
-		.cra_init        = ma35d1_sha_cra_init,
-		.cra_exit        = ma35d1_sha_cra_exit,
+		.cra_init        = ma35_sha_cra_init,
+		.cra_exit        = ma35_sha_cra_exit,
 	}
 },
 {
-	.init   = ma35d1_sha_init,
-	.update = ma35d1_sha_update,
-	.final  = ma35d1_sha_final,
-	.finup  = ma35d1_sha_finup,
-	.digest = ma35d1_sha_digest,
-	.export = ma35d1_sha_export,
-	.import = ma35d1_sha_import,
+	.init   = ma35_sha_init,
+	.update = ma35_sha_update,
+	.final  = ma35_sha_final,
+	.finup  = ma35_sha_finup,
+	.digest = ma35_sha_digest,
+	.export = ma35_sha_export,
+	.import = ma35_sha_import,
 	.halg.digestsize = MD5_DIGEST_SIZE,
 	.halg.statesize = sizeof(struct nu_sha_reqctx),
 	.halg.base = {
 		.cra_name        = "md5",
-		.cra_driver_name = "ma35d1-optee-md5",
-		.cra_priority    = 400,
+		.cra_driver_name = "ma35-optee-md5",
+		.cra_priority    = MA35_CRA_PRIORITY,
 		.cra_flags       = CRYPTO_ALG_ASYNC,
 		.cra_blocksize   = MD5_HMAC_BLOCK_SIZE,
 		.cra_ctxsize     = sizeof(struct nu_sha_ctx),
 		.cra_alignmask   = 0,
 		.cra_module      = THIS_MODULE,
-		.cra_init        = ma35d1_sha_cra_init,
-		.cra_exit        = ma35d1_sha_cra_exit,
+		.cra_init        = ma35_sha_cra_init,
+		.cra_exit        = ma35_sha_cra_exit,
 	}
 },
 };
 
-static struct ahash_alg  ma35d1_sha3_algs[] = {
+static struct ahash_alg  ma35_sha3_algs[] = {
 {
-	.init   = ma35d1_sha_init,
-	.update = ma35d1_sha_update,
-	.final  = ma35d1_sha_final,
-	.finup  = ma35d1_sha_finup,
-	.digest = ma35d1_sha_digest,
-	.export = ma35d1_sha_export,
-	.import = ma35d1_sha_import,
+	.init   = ma35_sha_init,
+	.update = ma35_sha_update,
+	.final  = ma35_sha_final,
+	.finup  = ma35_sha_finup,
+	.digest = ma35_sha_digest,
+	.export = ma35_sha_export,
+	.import = ma35_sha_import,
 	.halg.digestsize = SHA3_224_DIGEST_SIZE,
 	.halg.statesize = sizeof(struct nu_sha_reqctx),
 	.halg.base = {
 		.cra_name        = "sha3-224",
-		.cra_driver_name = "ma35d1-optee-sha3-224",
-		.cra_priority    = 400,
+		.cra_driver_name = "ma35-optee-sha3-224",
+		.cra_priority    = MA35_CRA_PRIORITY,
 		.cra_flags       = CRYPTO_ALG_ASYNC,
 		.cra_blocksize   = SHA3_224_BLOCK_SIZE,
 		.cra_ctxsize     = sizeof(struct nu_sha_ctx),
 		.cra_alignmask   = 0,
 		.cra_module      = THIS_MODULE,
-		.cra_init        = ma35d1_sha_cra_init,
-		.cra_exit        = ma35d1_sha_cra_exit,
+		.cra_init        = ma35_sha_cra_init,
+		.cra_exit        = ma35_sha_cra_exit,
 	}
 },
 {
-	.init   = ma35d1_sha_init,
-	.update = ma35d1_sha_update,
-	.final  = ma35d1_sha_final,
-	.finup  = ma35d1_sha_finup,
-	.digest = ma35d1_sha_digest,
-	.export = ma35d1_sha_export,
-	.import = ma35d1_sha_import,
+	.init   = ma35_sha_init,
+	.update = ma35_sha_update,
+	.final  = ma35_sha_final,
+	.finup  = ma35_sha_finup,
+	.digest = ma35_sha_digest,
+	.export = ma35_sha_export,
+	.import = ma35_sha_import,
 	.halg.digestsize = SHA3_256_DIGEST_SIZE,
 	.halg.statesize = sizeof(struct nu_sha_reqctx),
 	.halg.base = {
 		.cra_name        = "sha3-256",
-		.cra_driver_name = "ma35d1-sha3-256",
-		.cra_priority    = 400,
+		.cra_driver_name = "ma35-sha3-256",
+		.cra_priority    = MA35_CRA_PRIORITY,
 		.cra_flags       = CRYPTO_ALG_ASYNC,
 		.cra_blocksize   = SHA3_256_BLOCK_SIZE,
 		.cra_ctxsize     = sizeof(struct nu_sha_ctx),
 		.cra_alignmask   = 0,
 		.cra_module      = THIS_MODULE,
-		.cra_init        = ma35d1_sha_cra_init,
-		.cra_exit        = ma35d1_sha_cra_exit,
+		.cra_init        = ma35_sha_cra_init,
+		.cra_exit        = ma35_sha_cra_exit,
 	}
 },
 {
-	.init   = ma35d1_sha_init,
-	.update = ma35d1_sha_update,
-	.final  = ma35d1_sha_final,
-	.finup  = ma35d1_sha_finup,
-	.digest = ma35d1_sha_digest,
-	.export = ma35d1_sha_export,
-	.import = ma35d1_sha_import,
+	.init   = ma35_sha_init,
+	.update = ma35_sha_update,
+	.final  = ma35_sha_final,
+	.finup  = ma35_sha_finup,
+	.digest = ma35_sha_digest,
+	.export = ma35_sha_export,
+	.import = ma35_sha_import,
 	.halg.digestsize = SHA3_384_DIGEST_SIZE,
 	.halg.statesize = sizeof(struct nu_sha_reqctx),
 	.halg.base = {
 		.cra_name        = "sha3-384",
-		.cra_driver_name = "ma35d1-optee-sha3-384",
-		.cra_priority    = 400,
+		.cra_driver_name = "ma35-optee-sha3-384",
+		.cra_priority    = MA35_CRA_PRIORITY,
 		.cra_flags       = CRYPTO_ALG_ASYNC,
 		.cra_blocksize   = SHA3_384_BLOCK_SIZE,
 		.cra_ctxsize     = sizeof(struct nu_sha_ctx),
 		.cra_alignmask   = 0,
 		.cra_module      = THIS_MODULE,
-		.cra_init        = ma35d1_sha_cra_init,
-		.cra_exit        = ma35d1_sha_cra_exit,
+		.cra_init        = ma35_sha_cra_init,
+		.cra_exit        = ma35_sha_cra_exit,
 	}
 },
 {
-	.init   = ma35d1_sha_init,
-	.update = ma35d1_sha_update,
-	.final  = ma35d1_sha_final,
-	.finup  = ma35d1_sha_finup,
-	.digest = ma35d1_sha_digest,
-	.export = ma35d1_sha_export,
-	.import = ma35d1_sha_import,
+	.init   = ma35_sha_init,
+	.update = ma35_sha_update,
+	.final  = ma35_sha_final,
+	.finup  = ma35_sha_finup,
+	.digest = ma35_sha_digest,
+	.export = ma35_sha_export,
+	.import = ma35_sha_import,
 	.halg.digestsize = SHA3_512_DIGEST_SIZE,
 	.halg.statesize = sizeof(struct nu_sha_reqctx),
 	.halg.base = {
 		.cra_name        = "sha3-512",
-		.cra_driver_name = "ma35d1-sha3-512",
-		.cra_priority    = 400,
+		.cra_driver_name = "ma35-sha3-512",
+		.cra_priority    = MA35_CRA_PRIORITY,
 		.cra_flags       = CRYPTO_ALG_ASYNC,
 		.cra_blocksize   = SHA3_512_BLOCK_SIZE,
 		.cra_ctxsize     = sizeof(struct nu_sha_ctx),
 		.cra_alignmask   = 0,
 		.cra_module      = THIS_MODULE,
-		.cra_init        = ma35d1_sha_cra_init,
-		.cra_exit        = ma35d1_sha_cra_exit,
+		.cra_init        = ma35_sha_cra_init,
+		.cra_exit        = ma35_sha_cra_exit,
 	}
 },
 };
@@ -1296,29 +1296,29 @@ static struct ahash_alg  ma35d1_sha3_algs[] = {
 /*
  *  This task is triggerred by Crypto IRQ when a SHA DMA completed.
  */
-static void ma35d1_sha_done_task(unsigned long data)
+static void ma35_sha_done_task(unsigned long data)
 {
 	struct nu_sha_dev *dd = (struct nu_sha_dev *)data;
 	struct nu_sha_reqctx *ctx = ahash_request_ctx(dd->req);
 
-	ma35d1_sha_tee_unmap(dd);
-	ma35d1_sha_dma_complete(ctx);
+	ma35_sha_tee_unmap(dd);
+	ma35_sha_dma_complete(ctx);
 }
 
-static void ma35d1_sha_tee_queue_work(struct work_struct *work)
+static void ma35_sha_tee_queue_work(struct work_struct *work)
 {
-	struct ma35d1_sha_optee_state *tee =
-		container_of(work, struct ma35d1_sha_optee_state, queue_work);
+	struct ma35_sha_optee_state *tee =
+		container_of(work, struct ma35_sha_optee_state, queue_work);
 
-	ma35d1_sha_handle_queue(tee->dd, NULL);
+	ma35_sha_handle_queue(tee->dd, NULL);
 }
 
-static void ma35d1_sha_tee_done_work(struct work_struct *work)
+static void ma35_sha_tee_done_work(struct work_struct *work)
 {
-	struct ma35d1_sha_optee_state *tee =
-		container_of(work, struct ma35d1_sha_optee_state, done_work);
+	struct ma35_sha_optee_state *tee =
+		container_of(work, struct ma35_sha_optee_state, done_work);
 
-	ma35d1_sha_done_task((unsigned long)tee->dd);
+	ma35_sha_done_task((unsigned long)tee->dd);
 }
 
 static int optee_ctx_match(struct tee_ioctl_version_data *ver, const void *data)
@@ -1329,12 +1329,12 @@ static int optee_ctx_match(struct tee_ioctl_version_data *ver, const void *data)
 		return 0;
 }
 
-static int  ma35d1_optee_sha_init(struct nu_sha_dev *dd)
+static int  ma35_optee_sha_init(struct nu_sha_dev *dd)
 {
 	struct tee_ioctl_open_session_arg sess_arg = { };
 	int err;
 
-	err = ma35d1_crypto_optee_init(dd->nu_cdev);
+	err = ma35_crypto_optee_init(dd->nu_cdev);
 	if (err)
 		return err;
 	/*
@@ -1387,7 +1387,7 @@ out_ctx:
 	return err;
 }
 
-static void ma35d1_optee_sha_exit(struct nu_sha_dev *dd)
+static void ma35_optee_sha_exit(struct nu_sha_dev *dd)
 {
 	tee_shm_free(dd->shm_pool);
 	tee_client_close_session(dd->octx, dd->session_id);
@@ -1395,7 +1395,7 @@ static void ma35d1_optee_sha_exit(struct nu_sha_dev *dd)
 	dd->octx = NULL;
 }
 
-static void ma35d1_sha_tee_stop(struct nu_sha_dev *dd)
+static void ma35_sha_tee_stop(struct nu_sha_dev *dd)
 {
 	unsigned long flags;
 
@@ -1406,10 +1406,10 @@ static void ma35d1_sha_tee_stop(struct nu_sha_dev *dd)
 		destroy_workqueue(sha_tee.wq);
 		sha_tee.wq = NULL;
 	}
-	ma35d1_sha_tee_close_all(dd);
+	ma35_sha_tee_close_all(dd);
 }
 
-int ma35d1_sha_optee_probe(struct device *dev, struct nu_crypto_dev *crypto_dev)
+int ma35_sha_optee_probe(struct device *dev, struct nu_crypto_dev *crypto_dev)
 {
 	struct nu_sha_dev *sha_dd = &crypto_dev->sha_dd;
 	int i, err = 0;
@@ -1428,7 +1428,7 @@ int ma35d1_sha_optee_probe(struct device *dev, struct nu_crypto_dev *crypto_dev)
 	memset(&sha_tee, 0, sizeof(sha_tee));
 	sha_tee.dd = sha_dd;
 
-	err = ma35d1_optee_sha_init(sha_dd);
+	err = ma35_optee_sha_init(sha_dd);
 	if (err)
 		return err;
 
@@ -1437,9 +1437,9 @@ int ma35d1_sha_optee_probe(struct device *dev, struct nu_crypto_dev *crypto_dev)
 	INIT_LIST_HEAD(&sha_tee.sessions);
 	spin_lock_init(&sha_dd->lock);
 	crypto_init_queue(&sha_dd->queue, 32);
-	INIT_WORK(&sha_tee.queue_work, ma35d1_sha_tee_queue_work);
-	INIT_WORK(&sha_tee.done_work, ma35d1_sha_tee_done_work);
-	sha_tee.wq = alloc_ordered_workqueue("ma35d1-sha-optee",
+	INIT_WORK(&sha_tee.queue_work, ma35_sha_tee_queue_work);
+	INIT_WORK(&sha_tee.done_work, ma35_sha_tee_done_work);
+	sha_tee.wq = alloc_ordered_workqueue("ma35-sha-optee",
 						 WQ_MEM_RECLAIM);
 	if (!sha_tee.wq) {
 		err = -ENOMEM;
@@ -1450,24 +1450,24 @@ int ma35d1_sha_optee_probe(struct device *dev, struct nu_crypto_dev *crypto_dev)
 	list_add_tail(&sha_dd->list, &nu_sha.dev_list);
 	spin_unlock(&nu_sha.lock);
 
-	for (i = 0; i < ARRAY_SIZE(ma35d1_sha_algs); i++) {
-		err = crypto_register_ahash(&ma35d1_sha_algs[i]);
+	for (i = 0; i < ARRAY_SIZE(ma35_sha_algs); i++) {
+		err = crypto_register_ahash(&ma35_sha_algs[i]);
 		if (err) {
 			dev_err(dev, "failed to register %s/%s: %d\n",
-				ma35d1_sha_algs[i].halg.base.cra_name,
-				ma35d1_sha_algs[i].halg.base.cra_driver_name,
+				ma35_sha_algs[i].halg.base.cra_name,
+				ma35_sha_algs[i].halg.base.cra_driver_name,
 				err);
 			goto err_register;
 		}
 		sha_registered++;
 	}
 
-	for (i = 0; i < ARRAY_SIZE(ma35d1_sha3_algs); i++) {
-		err = crypto_register_ahash(&ma35d1_sha3_algs[i]);
+	for (i = 0; i < ARRAY_SIZE(ma35_sha3_algs); i++) {
+		err = crypto_register_ahash(&ma35_sha3_algs[i]);
 		if (err) {
 			dev_err(dev, "failed to register %s/%s: %d\n",
-				ma35d1_sha3_algs[i].halg.base.cra_name,
-				ma35d1_sha3_algs[i].halg.base.cra_driver_name,
+				ma35_sha3_algs[i].halg.base.cra_name,
+				ma35_sha3_algs[i].halg.base.cra_driver_name,
 				err);
 			goto err_register;
 		}
@@ -1480,21 +1480,21 @@ int ma35d1_sha_optee_probe(struct device *dev, struct nu_crypto_dev *crypto_dev)
 
 err_register:
 	while (sha3_registered--)
-		crypto_unregister_ahash(&ma35d1_sha3_algs[sha3_registered]);
+		crypto_unregister_ahash(&ma35_sha3_algs[sha3_registered]);
 	while (sha_registered--)
-		crypto_unregister_ahash(&ma35d1_sha_algs[sha_registered]);
+		crypto_unregister_ahash(&ma35_sha_algs[sha_registered]);
 	spin_lock(&nu_sha.lock);
 	list_del(&sha_dd->list);
 	spin_unlock(&nu_sha.lock);
-	ma35d1_sha_tee_stop(sha_dd);
+	ma35_sha_tee_stop(sha_dd);
 err_optee:
-	ma35d1_optee_sha_exit(sha_dd);
+	ma35_optee_sha_exit(sha_dd);
 	dev_err(dev, "SHA initialization failed. %d\n", err);
 
 	return err;
 }
 
-int ma35d1_sha_optee_remove(struct device *dev, struct nu_crypto_dev *crypto_dev)
+int ma35_sha_optee_remove(struct device *dev, struct nu_crypto_dev *crypto_dev)
 {
 	struct nu_sha_dev *sha_dd = &crypto_dev->sha_dd;
 	int i;
@@ -1502,19 +1502,19 @@ int ma35d1_sha_optee_remove(struct device *dev, struct nu_crypto_dev *crypto_dev
 	if (!sha_tee.registered)
 		return 0;
 
-	ma35d1_sha_tee_stop(sha_dd);
+	ma35_sha_tee_stop(sha_dd);
 
-	for (i = 0; i < ARRAY_SIZE(ma35d1_sha_algs); i++)
-		crypto_unregister_ahash(&ma35d1_sha_algs[i]);
+	for (i = 0; i < ARRAY_SIZE(ma35_sha_algs); i++)
+		crypto_unregister_ahash(&ma35_sha_algs[i]);
 
-	for (i = 0; i < ARRAY_SIZE(ma35d1_sha3_algs); i++)
-		crypto_unregister_ahash(&ma35d1_sha3_algs[i]);
+	for (i = 0; i < ARRAY_SIZE(ma35_sha3_algs); i++)
+		crypto_unregister_ahash(&ma35_sha3_algs[i]);
 
 	spin_lock(&nu_sha.lock);
 	list_del(&sha_dd->list);
 	spin_unlock(&nu_sha.lock);
 
-	ma35d1_optee_sha_exit(sha_dd);
+	ma35_optee_sha_exit(sha_dd);
 	sha_tee.registered = false;
 
 	return 0;

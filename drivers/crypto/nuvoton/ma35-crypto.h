@@ -13,11 +13,19 @@
 #define	__NUVOTON_CRYPTO_H__
 
 #include <linux/interrupt.h>
-#include <linux/workqueue.h>
 #include <linux/spinlock.h>
 #include <linux/scatterlist.h>
+#include <crypto/algapi.h>
 #include <crypto/scatterwalk.h>
 #include <linux/types.h>
+
+/*
+ * Priority of the skcipher, aead and ahash algorithms. It is kept below the
+ * ARMv8 Crypto Extension implementations (200..400), so that kernel users such
+ * as dm-crypt, IPsec and fscrypt use the CPU by default. TSI is still selected
+ * by its driver name, e.g. "ma35-optee-cbc-aes".
+ */
+#define MA35_CRA_PRIORITY	150
 
 #define	INTEN			0x000
 #define	INTEN_AESIEN			(0x1 <<	0)
@@ -366,9 +374,6 @@ struct nu_aes_dev {
 
 	struct tasklet_struct	done_task;
 	struct tasklet_struct	queue_task;
-	struct work_struct	done_work;
-	struct work_struct	queue_work;
-	int			optee_err;
 
 	u8			inbuf[AES_BUFF_SIZE] __aligned(32);
 	dma_addr_t		dma_inbuf;  /* AES input buffer	DMA address  */
@@ -445,8 +450,6 @@ struct nu_sha_dev {
 
 	struct tasklet_struct	done_task;
 	struct tasklet_struct	queue_task;
-	struct work_struct	done_work;
-	struct work_struct	queue_work;
 
 	/*
 	 * for optee client driver
@@ -856,25 +859,25 @@ struct ecc_args_t {
  */
 #define	PTA_CMD_CRYPTO_RSA_RUN		20
 
-int ma35d1_prng_probe(struct device *dev, void __iomem *reg_base, unsigned long *data);
-int ma35d1_prng_remove(struct device *dev, unsigned long data);
-int ma35d1_aes_probe(struct device *dev, struct nu_crypto_dev *crypto_dev);
-int ma35d1_aes_remove(struct device *dev, struct nu_crypto_dev *crypto_dev);
-int ma35d1_sha_probe(struct device *dev, struct nu_crypto_dev *crypto_dev);
-int ma35d1_sha_remove(struct device *dev, struct nu_crypto_dev *crypto_dev);
-int ma35d1_ecc_probe(struct device *dev, struct nu_crypto_dev *crypto_dev);
-int ma35d1_ecc_remove(struct device *dev, struct nu_crypto_dev *crypto_dev);
-int ma35d1_rsa_probe(struct device *dev, struct nu_crypto_dev *crypto_dev);
-int ma35d1_rsa_remove(struct device *dev, struct nu_crypto_dev *crypto_dev);
+int ma35_prng_probe(struct device *dev,	void __iomem *reg_base,	unsigned long *data);
+int ma35_prng_remove(struct device *dev, unsigned long data);
+int ma35_aes_probe(struct device *dev, struct nu_crypto_dev *crypto_dev);
+int ma35_aes_remove(struct device *dev,	struct nu_crypto_dev *crypto_dev);
+int ma35_sha_probe(struct device *dev, struct nu_crypto_dev *crypto_dev);
+int ma35_sha_remove(struct device *dev,	struct nu_crypto_dev *crypto_dev);
+int ma35_ecc_probe(struct device *dev, struct nu_crypto_dev *crypto_dev);
+int ma35_ecc_remove(struct device *dev,	struct nu_crypto_dev *crypto_dev);
+int ma35_rsa_probe(struct device *dev, struct nu_crypto_dev *crypto_dev);
+int ma35_rsa_remove(struct device *dev,	struct nu_crypto_dev *crypto_dev);
 
-int ma35d1_crypto_optee_init(struct nu_crypto_dev *crypto_dev);
-int ma35d1_aes_optee_probe(struct device *dev, struct nu_crypto_dev *crypto_dev);
-int ma35d1_aes_optee_remove(struct device *dev, struct nu_crypto_dev *crypto_dev);
-int ma35d1_sha_optee_probe(struct device *dev, struct nu_crypto_dev *crypto_dev);
-int ma35d1_sha_optee_remove(struct device *dev, struct nu_crypto_dev *crypto_dev);
-int ma35d1_ecc_optee_probe(struct device *dev, struct nu_crypto_dev *crypto_dev);
-int ma35d1_ecc_optee_remove(struct device *dev, struct nu_crypto_dev *crypto_dev);
-int ma35d1_rsa_optee_probe(struct device *dev, struct nu_crypto_dev *crypto_dev);
-int ma35d1_rsa_optee_remove(struct device *dev, struct nu_crypto_dev *crypto_dev);
+int ma35_crypto_optee_init(struct nu_crypto_dev	*crypto_dev);
+int ma35_aes_optee_probe(struct	device *dev, struct nu_crypto_dev *crypto_dev);
+int ma35_aes_optee_remove(struct device	*dev, struct nu_crypto_dev *crypto_dev);
+int ma35_sha_optee_probe(struct	device *dev, struct nu_crypto_dev *crypto_dev);
+int ma35_sha_optee_remove(struct device	*dev, struct nu_crypto_dev *crypto_dev);
+int ma35_ecc_optee_probe(struct	device *dev, struct nu_crypto_dev *crypto_dev);
+int ma35_ecc_optee_remove(struct device	*dev, struct nu_crypto_dev *crypto_dev);
+int ma35_rsa_optee_probe(struct	device *dev, struct nu_crypto_dev *crypto_dev);
+int ma35_rsa_optee_remove(struct device	*dev, struct nu_crypto_dev *crypto_dev);
 
 #endif

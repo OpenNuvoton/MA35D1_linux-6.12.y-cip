@@ -472,12 +472,12 @@
 		status = "okay";
 	};
 
-	crypto:crpt@40300000 {
-		compatible = "nuvoton,ma35d1-crypto";
+	crypto:crypto@40300000 {
+		compatible = "nuvoton,ma35d0-crypto";
 		reg = <0x0 0x40300000 0x0 0x1000>;
 		interrupts = <GIC_SPI 39 IRQ_TYPE_LEVEL_HIGH>;
-		rsa_ioctl = "yes";
-		ecc_ioctl = "yes";
+		rsa_ioctl = "yes";   /* yes: ma35 ioctl mode; no: linux akcipher mode */
+		ecc_ioctl = "yes";   /* yes: ma35 ioctl mode; no: linux akcipher mode */
 		status = "disabled";
 	};
 
@@ -486,8 +486,8 @@
 		status = "okay";
 	};
 
-	kstore:ks@40340800 {
-		compatible = "nuvoton,ma35d1-kstore";
+	key_store:kstore@40340800 {
+		compatible = "nuvoton,ma35d0-kstore";
 		reg = <0x0 0x40340800 0x0 0x800>;
 		interrupts = <GIC_SPI 41 IRQ_TYPE_LEVEL_HIGH>;
 		status = "disabled";
@@ -498,9 +498,9 @@
 		status = "okay";
 	};
 
-	trng: trng@40b90000 {
-		compatible = "nuvoton,ma35d1-trng";
-		reg = <0x0 0x40b90000 0x0 0x400>;
+	trng:trng@40b90000 {
+		compatible = "nuvoton,ma35d0-trng";
+		reg = <0x0 0x40B90000 0x0 0x400>;
 		interrupts = <GIC_SPI 40 IRQ_TYPE_LEVEL_HIGH>;
 		status = "disabled";
 	};

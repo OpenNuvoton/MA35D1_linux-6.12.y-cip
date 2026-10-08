@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
- * linux/driver/crypto/nuvoton/ma35d1-aes.c
+ * linux/driver/crypto/nuvoton/ma35-aes.c
  *
  * Copyright (c) 2025 Nuvoton technology corporation.
  *
@@ -30,13 +30,13 @@
 #include <linux/io.h>
 #include <linux/clk.h>
 
-#include "ma35d1-crypto.h"
+#include "ma35-crypto.h"
 
 #define AES_FLAGS_BUSY		BIT(1)
 
 static u8  g_zeros[16] = { 0 };
 
-static int ma35d1_aes_dma_cascade(struct nu_aes_dev *dd, int err);
+static int ma35_aes_dma_cascade(struct nu_aes_dev *dd, int err);
 
 struct nu_aes_drv {
 	struct list_head dev_list;
@@ -49,7 +49,7 @@ static struct nu_aes_drv  nu_aes = {
 	.lock = __SPIN_LOCK_UNLOCKED(nu_aes.lock),
 };
 
-static struct nu_aes_dev *ma35d1_aes_find_dev(struct nu_aes_base_ctx *ctx)
+static struct nu_aes_dev *ma35_aes_find_dev(struct nu_aes_base_ctx *ctx)
 {
 	struct nu_aes_dev *aes_dd = NULL;
 	struct nu_aes_dev *tmp;
@@ -69,17 +69,17 @@ static struct nu_aes_dev *ma35d1_aes_find_dev(struct nu_aes_base_ctx *ctx)
 	return aes_dd;
 }
 
-static inline void ma35d1_write_reg(struct nu_aes_dev *aes_dd, u32 val, u32 reg)
+static inline void ma35_write_reg(struct nu_aes_dev *aes_dd, u32 val, u32 reg)
 {
 	writel_relaxed(val, aes_dd->reg_base + reg);
 }
 
-static inline u32 ma35d1_read_reg(struct nu_aes_dev *aes_dd, u32 reg)
+static inline u32 ma35_read_reg(struct nu_aes_dev *aes_dd, u32 reg)
 {
 	return readl_relaxed(aes_dd->reg_base + reg);
 }
 
-static int ma35d1_aes_sg_to_buffer(struct nu_aes_dev *dd, u8 *bptr, int max_cnt)
+static int ma35_aes_sg_to_buffer(struct nu_aes_dev *dd, u8 *bptr, int max_cnt)
 {
 	int in_cnt, copy_len;
 
@@ -103,7 +103,7 @@ static int ma35d1_aes_sg_to_buffer(struct nu_aes_dev *dd, u8 *bptr, int max_cnt)
 	return in_cnt;
 }
 
-static int ma35d1_aes_buffer_to_sg(struct nu_aes_dev *dd, u8 *bptr, int max_cnt)
+static int ma35_aes_buffer_to_sg(struct nu_aes_dev *dd, u8 *bptr, int max_cnt)
 {
 	int copy_len, out_cnt = 0;
 
@@ -123,27 +123,27 @@ static int ma35d1_aes_buffer_to_sg(struct nu_aes_dev *dd, u8 *bptr, int max_cnt)
 	return out_cnt;
 }
 
-static int ma35d1_aes_get_output(struct nu_aes_dev *dd)
+static int ma35_aes_get_output(struct nu_aes_dev *dd)
 {
 	struct nu_aes_base_ctx *ctx = dd->ctx;
 	int retval;
 
 	if ((ctx->mode & AES_CTL_OPMODE_MASK) == AES_MODE_GCM) {
-		ma35d1_aes_buffer_to_sg(dd, dd->inbuf, ctx->assoclen);
+		ma35_aes_buffer_to_sg(dd, dd->inbuf, ctx->assoclen);
 
-		retval = ma35d1_aes_buffer_to_sg(dd, dd->outbuf, ctx->text_len);
+		retval = ma35_aes_buffer_to_sg(dd, dd->outbuf, ctx->text_len);
 		if ((retval % 16) != 0) {
 			/* seek to block aligned position */
 			retval += (16 - (retval % 16));
 		}
 
 		/* attach auth tag to end of ciphertext */
-		ma35d1_aes_buffer_to_sg(dd, dd->outbuf + retval, ctx->authsize);
+		ma35_aes_buffer_to_sg(dd, dd->outbuf + retval, ctx->authsize);
 
 	} else if ((ctx->mode & AES_CTL_OPMODE_MASK) == AES_MODE_CCM) {
-		ma35d1_aes_buffer_to_sg(dd, dd->inbuf, ctx->assoclen);
+		ma35_aes_buffer_to_sg(dd, dd->inbuf, ctx->assoclen);
 
-		retval = ma35d1_aes_buffer_to_sg(dd, dd->outbuf, ctx->text_len);
+		retval = ma35_aes_buffer_to_sg(dd, dd->outbuf, ctx->text_len);
 		if ((retval % 16) != 0) {
 			/* seek to block aligned position */
 			retval += (16 - (retval % 16));
@@ -151,7 +151,7 @@ static int ma35d1_aes_get_output(struct nu_aes_dev *dd)
 
 		if (ctx->mode & AES_CTL_ENCRPT) {
 			/* attach auth tag to end of ciphertext */
-			ma35d1_aes_buffer_to_sg(dd, dd->outbuf + retval, ctx->authsize);
+			ma35_aes_buffer_to_sg(dd, dd->outbuf + retval, ctx->authsize);
 		} else {
 			/* check the decrypt output auth tag */
 			if (memcmp(ctx->tag, dd->outbuf + retval, ctx->authsize) != 0) {
@@ -161,24 +161,24 @@ static int ma35d1_aes_get_output(struct nu_aes_dev *dd)
 			pr_debug("CMM check passed. %d, %d\n", retval, ctx->authsize);
 		}
 	} else {
-		retval = ma35d1_aes_buffer_to_sg(dd, dd->outbuf, dd->dma_len);
+		retval = ma35_aes_buffer_to_sg(dd, dd->outbuf, dd->dma_len);
 		dd->dma_len = 0;
 	}
 	return 0;
 }
 
-static int ma35d1_aes_complete(struct nu_aes_dev *dd, int err)
+static int ma35_aes_complete(struct nu_aes_dev *dd, int err)
 {
 	struct skcipher_request *req = skcipher_request_cast(dd->areq);
 	u32 *ivec;
 	int i;
 
-	err = ma35d1_aes_get_output(dd);
+	err = ma35_aes_get_output(dd);
 
 	if ((req->iv) && ((dd->ctx->mode & AES_CTL_OPMODE_MASK) != AES_MODE_ECB)) {
 		ivec = (u32 *)req->iv;
 		for (i = 0; i < 4; i++)
-			ivec[i] = ma35d1_read_reg(dd, AES_FDBCK(i));
+			ivec[i] = ma35_read_reg(dd, AES_FDBCK(i));
 	}
 
 	dd->flags &= ~AES_FLAGS_BUSY;
@@ -190,19 +190,19 @@ static int ma35d1_aes_complete(struct nu_aes_dev *dd, int err)
 	return 0;
 }
 
-static int ma35d1_aes_dma_run(struct nu_aes_dev *dd, u32 cascade)
+static int ma35_aes_dma_run(struct nu_aes_dev *dd, u32 cascade)
 {
 	struct device *dev = dd->dev;
 	u32 dma_ctl;
 
-	dd->dma_len += ma35d1_aes_sg_to_buffer(dd, dd->inbuf + dd->dma_len,
-					       AES_BUFF_SIZE - dd->dma_len);
+	dd->dma_len += ma35_aes_sg_to_buffer(dd, dd->inbuf + dd->dma_len,
+					     AES_BUFF_SIZE - dd->dma_len);
 
 	if (!dd->in_sg || (dd->req_len == 0)) {
-		dd->resume = ma35d1_aes_complete;	/* no more data */
+		dd->resume = ma35_aes_complete;	/* no more data */
 		dma_ctl = cascade | AES_CTL_DMALAST;
 	} else {
-		dd->resume = ma35d1_aes_dma_cascade;
+		dd->resume = ma35_aes_dma_cascade;
 		dma_ctl = cascade;
 	}
 
@@ -223,26 +223,26 @@ static int ma35d1_aes_dma_run(struct nu_aes_dev *dd, u32 cascade)
 	 *  Execute AES encrypt/decrypt
 	 */
 	pr_debug("AES start dma_len = %d\n", dd->dma_len);
-	ma35d1_write_reg(dd, dd->dma_len, AES_CNT);
-	ma35d1_write_reg(dd, dd->dma_inbuf, AES_SADDR);
-	ma35d1_write_reg(dd, dd->dma_outbuf, AES_DADDR);
+	ma35_write_reg(dd, dd->dma_len, AES_CNT);
+	ma35_write_reg(dd, dd->dma_inbuf, AES_SADDR);
+	ma35_write_reg(dd, dd->dma_outbuf, AES_DADDR);
 
 	/* start AES */
-	ma35d1_write_reg(dd, (ma35d1_read_reg(dd, AES_CTL) | dma_ctl | AES_CTL_START), AES_CTL);
+	ma35_write_reg(dd, (ma35_read_reg(dd, AES_CTL) | dma_ctl | AES_CTL_START), AES_CTL);
 
 	return -EINPROGRESS;
 }
 
-static int ma35d1_aes_dma_cascade(struct nu_aes_dev *dd, int err)
+static int ma35_aes_dma_cascade(struct nu_aes_dev *dd, int err)
 {
 	/* write AES engine DMA output data to out_sg */
-	ma35d1_aes_get_output(dd);
+	ma35_aes_get_output(dd);
 
 	/* cascade AES DMA to process remaining data */
-	return ma35d1_aes_dma_run(dd, AES_CTL_DMACSCAD);
+	return ma35_aes_dma_run(dd, AES_CTL_DMACSCAD);
 }
 
-static int ma35d1_aes_dma_start(struct nu_aes_dev *dd, int err)
+static int ma35_aes_dma_start(struct nu_aes_dev *dd, int err)
 {
 	struct skcipher_request *req = skcipher_request_cast(dd->areq);
 	struct nu_aes_base_ctx *ctx = dd->ctx;
@@ -250,7 +250,7 @@ static int ma35d1_aes_dma_start(struct nu_aes_dev *dd, int err)
 	int i;
 
 	if ((req->cryptlen == 0) || (req->src == NULL) || (req->dst == NULL))
-		return ma35d1_aes_complete(dd, 0);  /* no data */
+		return ma35_aes_complete(dd, 0);  /* no data */
 
 	dd->req_len = req->cryptlen;
 	dd->in_sg = req->src;
@@ -263,42 +263,42 @@ static int ma35d1_aes_dma_start(struct nu_aes_dev *dd, int err)
 		/* configure AES Key from Key Store */
 		u8 *key = (u8 *)ctx->aes_key;
 
-		ma35d1_write_reg(dd, (key[1] << 7) | AES_KSCTL_RSRC | key[2], AES_KSCTL);
+		ma35_write_reg(dd, (key[1] << 7) | AES_KSCTL_RSRC | key[2], AES_KSCTL);
 	} else {
 		/* program AES key */
-		ma35d1_write_reg(dd, 0, AES_KSCTL);
+		ma35_write_reg(dd, 0, AES_KSCTL);
 		for (i = 0; i < ctx->keylen / 4; i++)
-			ma35d1_write_reg(dd, ctx->aes_key[i], AES_KEY(i));
+			ma35_write_reg(dd, ctx->aes_key[i], AES_KEY(i));
 	}
 
 	/* program AES IV */
 	if (iv) {
 		for (i = 0; i < 4; i++)
-			ma35d1_write_reg(dd, iv[i], AES_IV(i));
+			ma35_write_reg(dd, iv[i], AES_IV(i));
 	} else {
 		for (i = 0; i < 4; i++)
-			ma35d1_write_reg(dd, 0, AES_IV(i));
+			ma35_write_reg(dd, 0, AES_IV(i));
 	}
 
-	ma35d1_write_reg(dd, ma35d1_read_reg(dd, INTEN) | (INTEN_AESIEN | INTEN_AESEIEN), INTEN);
-	ma35d1_write_reg(dd, 0, AES_CTL);
-	ma35d1_write_reg(dd, (INTSTS_AESIF | INTSTS_AESEIF), INTSTS);
+	ma35_write_reg(dd, ma35_read_reg(dd, INTEN) | (INTEN_AESIEN | INTEN_AESEIEN), INTEN);
+	ma35_write_reg(dd, 0, AES_CTL);
+	ma35_write_reg(dd, (INTSTS_AESIF | INTSTS_AESEIF), INTSTS);
 
-	ma35d1_write_reg(dd, 0, AES_GCM_IVCNT(0));
-	ma35d1_write_reg(dd, 0, AES_GCM_ACNT(0));
-	ma35d1_write_reg(dd, 0, AES_GCM_PCNT(0));
+	ma35_write_reg(dd, 0, AES_GCM_IVCNT(0));
+	ma35_write_reg(dd, 0, AES_GCM_ACNT(0));
+	ma35_write_reg(dd, 0, AES_GCM_PCNT(0));
 
-	ma35d1_write_reg(dd, (ctx->keysz_sel | ctx->mode | AES_CTL_INSWAP |
-			 AES_CTL_OUTSWAP | AES_CTL_KINSWAP | AES_CTL_KOUTSWAP |
-			 AES_CTL_DMAEN), AES_CTL);
+	ma35_write_reg(dd, (ctx->keysz_sel | ctx->mode | AES_CTL_INSWAP |
+			AES_CTL_OUTSWAP | AES_CTL_KINSWAP | AES_CTL_KOUTSWAP |
+			AES_CTL_DMAEN), AES_CTL);
 
 	pr_debug("[%s] - mode: 0x%08x, AES_CTL = 0x%x\n", __func__,
-		 ctx->mode, ma35d1_read_reg(dd, AES_CTL));
+		 ctx->mode, ma35_read_reg(dd, AES_CTL));
 
-	return ma35d1_aes_dma_run(dd, 0);
+	return ma35_aes_dma_run(dd, 0);
 }
 
-static int ma35d1_aes_handle_queue(struct nu_aes_dev *dd, struct crypto_async_request *new_areq)
+static int ma35_aes_handle_queue(struct nu_aes_dev *dd, struct crypto_async_request *new_areq)
 {
 	struct crypto_async_request *areq, *backlog;
 	struct nu_aes_base_ctx *ctx;
@@ -335,21 +335,21 @@ static int ma35d1_aes_handle_queue(struct nu_aes_dev *dd, struct crypto_async_re
 	return ctx->start(dd, 0);
 }
 
-static int ma35d1_aes_crypt(struct skcipher_request *req, u32 mode)
+static int ma35_aes_crypt(struct skcipher_request *req, u32 mode)
 {
 	struct nu_aes_base_ctx *ctx = crypto_skcipher_ctx(crypto_skcipher_reqtfm(req));
 	struct nu_aes_dev *aes_dd;
 
-	aes_dd = ma35d1_aes_find_dev(ctx);
+	aes_dd = ma35_aes_find_dev(ctx);
 	if (!aes_dd)
 		return -ENODEV;
 
 	ctx->mode = mode;
 
-	return ma35d1_aes_handle_queue(aes_dd, &req->base);
+	return ma35_aes_handle_queue(aes_dd, &req->base);
 }
 
-static int ma35d1_aes_setkey(struct crypto_skcipher *tfm, const u8 *key, unsigned int keylen)
+static int ma35_aes_setkey(struct crypto_skcipher *tfm, const u8 *key, unsigned int keylen)
 {
 	struct nu_aes_base_ctx *ctx = crypto_skcipher_ctx(tfm);
 
@@ -380,246 +380,246 @@ static int ma35d1_aes_setkey(struct crypto_skcipher *tfm, const u8 *key, unsigne
 	return 0;
 }
 
-static int ma35d1_aes_ecb_encrypt(struct skcipher_request *req)
+static int ma35_aes_ecb_encrypt(struct skcipher_request *req)
 {
-	return ma35d1_aes_crypt(req, AES_MODE_ECB | AES_CTL_ENCRPT);
+	return ma35_aes_crypt(req, AES_MODE_ECB | AES_CTL_ENCRPT);
 }
 
-static int ma35d1_aes_ecb_decrypt(struct skcipher_request *req)
+static int ma35_aes_ecb_decrypt(struct skcipher_request *req)
 {
-	return ma35d1_aes_crypt(req, AES_MODE_ECB);
+	return ma35_aes_crypt(req, AES_MODE_ECB);
 }
 
-static int ma35d1_aes_cbc_encrypt(struct skcipher_request *req)
+static int ma35_aes_cbc_encrypt(struct skcipher_request *req)
 {
-	return ma35d1_aes_crypt(req, AES_MODE_CBC | AES_CTL_ENCRPT);
+	return ma35_aes_crypt(req, AES_MODE_CBC | AES_CTL_ENCRPT);
 }
 
-static int ma35d1_aes_cbc_decrypt(struct skcipher_request *req)
+static int ma35_aes_cbc_decrypt(struct skcipher_request *req)
 {
-	return ma35d1_aes_crypt(req, AES_MODE_CBC);
+	return ma35_aes_crypt(req, AES_MODE_CBC);
 }
 
-static int ma35d1_aes_cfb_encrypt(struct skcipher_request *req)
+static int ma35_aes_cfb_encrypt(struct skcipher_request *req)
 {
-	return ma35d1_aes_crypt(req, AES_MODE_CFB | AES_CTL_ENCRPT);
+	return ma35_aes_crypt(req, AES_MODE_CFB | AES_CTL_ENCRPT);
 }
 
-static int ma35d1_aes_cfb_decrypt(struct skcipher_request *req)
+static int ma35_aes_cfb_decrypt(struct skcipher_request *req)
 {
-	return ma35d1_aes_crypt(req, AES_MODE_CFB);
+	return ma35_aes_crypt(req, AES_MODE_CFB);
 }
 
-static int ma35d1_aes_ofb_encrypt(struct skcipher_request *req)
+static int ma35_aes_ofb_encrypt(struct skcipher_request *req)
 {
-	return ma35d1_aes_crypt(req, AES_MODE_OFB | AES_CTL_ENCRPT);
+	return ma35_aes_crypt(req, AES_MODE_OFB | AES_CTL_ENCRPT);
 }
 
-static int ma35d1_aes_ofb_decrypt(struct skcipher_request *req)
+static int ma35_aes_ofb_decrypt(struct skcipher_request *req)
 {
-	return ma35d1_aes_crypt(req, AES_MODE_OFB);
+	return ma35_aes_crypt(req, AES_MODE_OFB);
 }
 
-static int ma35d1_aes_ctr_encrypt(struct skcipher_request *req)
+static int ma35_aes_ctr_encrypt(struct skcipher_request *req)
 {
-	return ma35d1_aes_crypt(req, AES_MODE_CTR | AES_CTL_ENCRPT);
+	return ma35_aes_crypt(req, AES_MODE_CTR | AES_CTL_ENCRPT);
 }
 
-static int ma35d1_aes_ctr_decrypt(struct skcipher_request *req)
+static int ma35_aes_ctr_decrypt(struct skcipher_request *req)
 {
-	return ma35d1_aes_crypt(req, AES_MODE_CTR);
+	return ma35_aes_crypt(req, AES_MODE_CTR);
 }
 
 #ifdef SUPPORT_SM4
-static int ma35d1_sm4_ecb_encrypt(struct skcipher_request *req)
+static int ma35_sm4_ecb_encrypt(struct skcipher_request *req)
 {
-	return ma35d1_aes_crypt(req, AES_CTL_SM4EN | AES_MODE_ECB | AES_CTL_ENCRPT);
+	return ma35_aes_crypt(req, AES_CTL_SM4EN | AES_MODE_ECB | AES_CTL_ENCRPT);
 }
 
-static int ma35d1_sm4_ecb_decrypt(struct skcipher_request *req)
+static int ma35_sm4_ecb_decrypt(struct skcipher_request *req)
 {
-	return ma35d1_aes_crypt(req, AES_CTL_SM4EN | AES_MODE_ECB);
+	return ma35_aes_crypt(req, AES_CTL_SM4EN | AES_MODE_ECB);
 }
 
-static int ma35d1_sm4_cbc_encrypt(struct skcipher_request *req)
+static int ma35_sm4_cbc_encrypt(struct skcipher_request *req)
 {
-	return ma35d1_aes_crypt(req, AES_CTL_SM4EN | AES_MODE_CBC | AES_CTL_ENCRPT);
+	return ma35_aes_crypt(req, AES_CTL_SM4EN | AES_MODE_CBC | AES_CTL_ENCRPT);
 }
 
-static int ma35d1_sm4_cbc_decrypt(struct skcipher_request *req)
+static int ma35_sm4_cbc_decrypt(struct skcipher_request *req)
 {
-	return ma35d1_aes_crypt(req, AES_CTL_SM4EN | AES_MODE_CBC);
+	return ma35_aes_crypt(req, AES_CTL_SM4EN | AES_MODE_CBC);
 }
 
-static int ma35d1_sm4_ctr_encrypt(struct skcipher_request *req)
+static int ma35_sm4_ctr_encrypt(struct skcipher_request *req)
 {
-	return ma35d1_aes_crypt(req, AES_CTL_SM4EN | AES_MODE_CTR | AES_CTL_ENCRPT);
+	return ma35_aes_crypt(req, AES_CTL_SM4EN | AES_MODE_CTR | AES_CTL_ENCRPT);
 }
 
-static int ma35d1_sm4_ctr_decrypt(struct skcipher_request *req)
+static int ma35_sm4_ctr_decrypt(struct skcipher_request *req)
 {
-	return ma35d1_aes_crypt(req, AES_CTL_SM4EN|AES_MODE_CTR);
+	return ma35_aes_crypt(req, AES_CTL_SM4EN|AES_MODE_CTR);
 }
 #endif
 
-static int ma35d1_aes_cra_init(struct crypto_tfm *tfm)
+static int ma35_aes_cra_init(struct crypto_tfm *tfm)
 {
 	struct nu_aes_ctx *ctx = crypto_tfm_ctx(tfm);
 	struct nu_aes_dev *aes_dd;
 
 	// printk("AES: %s\n", tfm->__crt_alg->cra_driver_name);
-	ctx->base.start = ma35d1_aes_dma_start;
+	ctx->base.start = ma35_aes_dma_start;
 
-	aes_dd = ma35d1_aes_find_dev(&ctx->base);
+	aes_dd = ma35_aes_find_dev(&ctx->base);
 	if (!aes_dd)
 		return -ENODEV;
 
 	return 0;
 }
 
-static struct skcipher_alg ma35d1_aes_algs[] = {
+static struct skcipher_alg ma35_aes_algs[] = {
 {
 	.base.cra_name		= "cbc(aes)",
-	.base.cra_driver_name	= "ma35d1-cbc-aes",
-	.base.cra_priority	= 400,
+	.base.cra_driver_name	= "ma35-cbc-aes",
+	.base.cra_priority	= MA35_CRA_PRIORITY,
 	.base.cra_flags		= CRYPTO_ALG_ASYNC,
 	.base.cra_blocksize	= AES_BLOCK_SIZE,
 	.base.cra_ctxsize	= sizeof(struct nu_aes_ctx),
 	.base.cra_alignmask	= 0xf,
-	.base.cra_init		= ma35d1_aes_cra_init,
+	.base.cra_init		= ma35_aes_cra_init,
 	.base.cra_module	= THIS_MODULE,
 
 	.min_keysize		= AES_MIN_KEY_SIZE,
 	.max_keysize		= AES_MAX_KEY_SIZE,
 	.ivsize			= AES_BLOCK_SIZE,
-	.setkey			= ma35d1_aes_setkey,
-	.encrypt		= ma35d1_aes_cbc_encrypt,
-	.decrypt		= ma35d1_aes_cbc_decrypt,
+	.setkey			= ma35_aes_setkey,
+	.encrypt		= ma35_aes_cbc_encrypt,
+	.decrypt		= ma35_aes_cbc_decrypt,
 },
 {
 	.base.cra_name		= "ecb(aes)",
-	.base.cra_driver_name	= "ma35d1-ecb-aes",
-	.base.cra_priority	= 400,
+	.base.cra_driver_name	= "ma35-ecb-aes",
+	.base.cra_priority	= MA35_CRA_PRIORITY,
 	.base.cra_flags		= CRYPTO_ALG_ASYNC,
 	.base.cra_blocksize	= AES_BLOCK_SIZE,
 	.base.cra_ctxsize	= sizeof(struct nu_aes_ctx),
 	.base.cra_alignmask	= 0xf,
-	.base.cra_init		= ma35d1_aes_cra_init,
+	.base.cra_init		= ma35_aes_cra_init,
 	.base.cra_module	= THIS_MODULE,
 
 	.min_keysize		= AES_MIN_KEY_SIZE,
 	.max_keysize		= AES_MAX_KEY_SIZE,
-	.setkey			= ma35d1_aes_setkey,
-	.encrypt		= ma35d1_aes_ecb_encrypt,
-	.decrypt		= ma35d1_aes_ecb_decrypt,
+	.setkey			= ma35_aes_setkey,
+	.encrypt		= ma35_aes_ecb_encrypt,
+	.decrypt		= ma35_aes_ecb_decrypt,
 },
 {
 	.base.cra_name		= "cfb(aes)",
-	.base.cra_driver_name	= "ma35d1-cfb-aes",
-	.base.cra_priority	= 400,
+	.base.cra_driver_name	= "ma35-cfb-aes",
+	.base.cra_priority	= MA35_CRA_PRIORITY,
 	.base.cra_flags		= CRYPTO_ALG_ASYNC,
 	.base.cra_blocksize	= AES_BLOCK_SIZE,
 	.base.cra_ctxsize	= sizeof(struct nu_aes_ctx),
 	.base.cra_alignmask	= 0xf,
-	.base.cra_init		= ma35d1_aes_cra_init,
+	.base.cra_init		= ma35_aes_cra_init,
 	.base.cra_module	= THIS_MODULE,
 
 	.min_keysize		= AES_MIN_KEY_SIZE,
 	.max_keysize		= AES_MAX_KEY_SIZE,
 	.ivsize			= AES_BLOCK_SIZE,
-	.setkey			= ma35d1_aes_setkey,
-	.encrypt		= ma35d1_aes_cfb_encrypt,
-	.decrypt		= ma35d1_aes_cfb_decrypt,
+	.setkey			= ma35_aes_setkey,
+	.encrypt		= ma35_aes_cfb_encrypt,
+	.decrypt		= ma35_aes_cfb_decrypt,
 },
 {
 	.base.cra_name		= "ofb(aes)",
-	.base.cra_driver_name	= "ma35d1-ofb-aes",
-	.base.cra_priority	= 400,
+	.base.cra_driver_name	= "ma35-ofb-aes",
+	.base.cra_priority	= MA35_CRA_PRIORITY,
 	.base.cra_flags		= CRYPTO_ALG_ASYNC,
 	.base.cra_blocksize	= AES_BLOCK_SIZE,
 	.base.cra_ctxsize	= sizeof(struct nu_aes_ctx),
 	.base.cra_alignmask	= 0xf,
-	.base.cra_init		= ma35d1_aes_cra_init,
+	.base.cra_init		= ma35_aes_cra_init,
 	.base.cra_module	= THIS_MODULE,
 
 	.min_keysize		= AES_MIN_KEY_SIZE,
 	.max_keysize		= AES_MAX_KEY_SIZE,
 	.ivsize			= AES_BLOCK_SIZE,
-	.setkey			= ma35d1_aes_setkey,
-	.encrypt		= ma35d1_aes_ofb_encrypt,
-	.decrypt		= ma35d1_aes_ofb_decrypt,
+	.setkey			= ma35_aes_setkey,
+	.encrypt		= ma35_aes_ofb_encrypt,
+	.decrypt		= ma35_aes_ofb_decrypt,
 },
 {
 	.base.cra_name		= "ctr(aes)",
-	.base.cra_driver_name	= "ma35d1-ctr-aes",
-	.base.cra_priority	= 400,
+	.base.cra_driver_name	= "ma35-ctr-aes",
+	.base.cra_priority	= MA35_CRA_PRIORITY,
 	.base.cra_flags		= CRYPTO_ALG_ASYNC,
 	.base.cra_blocksize	= 1,
 	.base.cra_ctxsize	= sizeof(struct nu_aes_ctx),
 	.base.cra_alignmask	= 0xf,
-	.base.cra_init		= ma35d1_aes_cra_init,
+	.base.cra_init		= ma35_aes_cra_init,
 	.base.cra_module	= THIS_MODULE,
 
 	.min_keysize		= AES_MIN_KEY_SIZE,
 	.max_keysize		= AES_MAX_KEY_SIZE,
 	.ivsize			= AES_BLOCK_SIZE,
-	.setkey			= ma35d1_aes_setkey,
-	.encrypt		= ma35d1_aes_ctr_encrypt,
-	.decrypt		= ma35d1_aes_ctr_decrypt,
+	.setkey			= ma35_aes_setkey,
+	.encrypt		= ma35_aes_ctr_encrypt,
+	.decrypt		= ma35_aes_ctr_decrypt,
 },
 #ifdef SUPPORT_SM4
 {
 	.base.cra_name		= "ecb(sm4)",
-	.base.cra_driver_name	= "ma35d1-ecb-sm4",
-	.base.cra_priority	= 400,
+	.base.cra_driver_name	= "ma35-ecb-sm4",
+	.base.cra_priority	= MA35_CRA_PRIORITY,
 	.base.cra_flags		= CRYPTO_ALG_ASYNC,
 	.base.cra_blocksize	= AES_BLOCK_SIZE,
 	.base.cra_ctxsize	= sizeof(struct nu_aes_ctx),
 	.base.cra_alignmask	= 0xf,
-	.base.cra_init		= ma35d1_aes_cra_init,
+	.base.cra_init		= ma35_aes_cra_init,
 	.base.cra_module	= THIS_MODULE,
 
 	.min_keysize		= AES_MIN_KEY_SIZE,
 	.max_keysize		= AES_MAX_KEY_SIZE,
-	.setkey			= ma35d1_aes_setkey,
-	.encrypt		= ma35d1_sm4_ecb_encrypt,
-	.decrypt		= ma35d1_sm4_ecb_decrypt,
+	.setkey			= ma35_aes_setkey,
+	.encrypt		= ma35_sm4_ecb_encrypt,
+	.decrypt		= ma35_sm4_ecb_decrypt,
 },
 {
 	.base.cra_name		= "cbc(sm4)",
-	.base.cra_driver_name	= "ma35d1-cbc-sm4",
-	.base.cra_priority	= 400,
+	.base.cra_driver_name	= "ma35-cbc-sm4",
+	.base.cra_priority	= MA35_CRA_PRIORITY,
 	.base.cra_flags		= CRYPTO_ALG_ASYNC,
 	.base.cra_blocksize	= AES_BLOCK_SIZE,
 	.base.cra_ctxsize	= sizeof(struct nu_aes_ctx),
 	.base.cra_alignmask	= 0xf,
-	.base.cra_init		= ma35d1_aes_cra_init,
+	.base.cra_init		= ma35_aes_cra_init,
 	.base.cra_module	= THIS_MODULE,
 
 	.min_keysize		= AES_MIN_KEY_SIZE,
 	.max_keysize		= AES_MAX_KEY_SIZE,
 	.ivsize			= AES_BLOCK_SIZE,
-	.setkey			= ma35d1_aes_setkey,
-	.encrypt		= ma35d1_sm4_cbc_encrypt,
-	.decrypt		= ma35d1_sm4_cbc_decrypt,
+	.setkey			= ma35_aes_setkey,
+	.encrypt		= ma35_sm4_cbc_encrypt,
+	.decrypt		= ma35_sm4_cbc_decrypt,
 },
 {
 	.base.cra_name		= "ctr(sm4)",
-	.base.cra_driver_name	= "ma35d1-ctr-sm4",
-	.base.cra_priority	= 400,
+	.base.cra_driver_name	= "ma35-ctr-sm4",
+	.base.cra_priority	= MA35_CRA_PRIORITY,
 	.base.cra_flags		= CRYPTO_ALG_ASYNC,
 	.base.cra_blocksize	= 1,
 	.base.cra_ctxsize	= sizeof(struct nu_aes_ctx),
 	.base.cra_alignmask	= 0xf,
-	.base.cra_init		= ma35d1_aes_cra_init,
+	.base.cra_init		= ma35_aes_cra_init,
 	.base.cra_module	= THIS_MODULE,
 
 	.min_keysize		= AES_MIN_KEY_SIZE,
 	.max_keysize		= AES_MAX_KEY_SIZE,
 	.ivsize			= AES_BLOCK_SIZE,
-	.setkey			= ma35d1_aes_setkey,
-	.encrypt		= ma35d1_sm4_ctr_encrypt,
-	.decrypt		= ma35d1_sm4_ctr_decrypt,
+	.setkey			= ma35_aes_setkey,
+	.encrypt		= ma35_sm4_ctr_encrypt,
+	.decrypt		= ma35_sm4_ctr_decrypt,
 },
 #endif
 };
@@ -630,7 +630,7 @@ static struct skcipher_alg ma35d1_aes_algs[] = {
 /*                                                                        */
 /*------------------------------------------------------------------------*/
 
-static int ma35d1_aes_gcm_dma_start(struct nu_aes_dev *dd, int err)
+static int ma35_aes_gcm_dma_start(struct nu_aes_dev *dd, int err)
 {
 	struct aead_request *req = aead_request_cast(dd->areq);
 	struct nu_aes_base_ctx *ctx = dd->ctx;
@@ -660,8 +660,8 @@ static int ma35d1_aes_gcm_dma_start(struct nu_aes_dev *dd, int err)
 	 *  Copy associate authenticated data
 	 */
 	if (req->assoclen) {
-		dd->dma_len += ma35d1_aes_sg_to_buffer(dd, dd->inbuf + dd->dma_len,
-						       req->assoclen);
+		dd->dma_len += ma35_aes_sg_to_buffer(dd, dd->inbuf + dd->dma_len,
+						     req->assoclen);
 
 		/* padding to be AES block aligned */
 		if ((req->assoclen % 16) != 0) {
@@ -675,8 +675,8 @@ static int ma35d1_aes_gcm_dma_start(struct nu_aes_dev *dd, int err)
 	 *  Copy text data
 	 */
 	if (req->cryptlen) {
-		dd->dma_len += ma35d1_aes_sg_to_buffer(dd, dd->inbuf + dd->dma_len,
-						       req->cryptlen);
+		dd->dma_len += ma35_aes_sg_to_buffer(dd, dd->inbuf + dd->dma_len,
+						     req->cryptlen);
 
 		/* padding to be AES block aligned */
 		if ((req->cryptlen % 16) != 0) {
@@ -690,65 +690,65 @@ static int ma35d1_aes_gcm_dma_start(struct nu_aes_dev *dd, int err)
 		/* configure AES Key from Key Store */
 		u8 *key = (u8 *)ctx->aes_key;
 
-		ma35d1_write_reg(dd, (key[1] << 7) | AES_KSCTL_RSRC | key[2], AES_KSCTL);
+		ma35_write_reg(dd, (key[1] << 7) | AES_KSCTL_RSRC | key[2], AES_KSCTL);
 	} else {
 		/* program AES key */
-		ma35d1_write_reg(dd, 0, AES_KSCTL);
+		ma35_write_reg(dd, 0, AES_KSCTL);
 		for (i = 0; i < ctx->keylen/4; i++) {
 			key = ctx->aes_key[i];
 			key = ((key>>24)&0xff) | ((key>>8)&0xff00) |
 			      ((key&0xff00)<<8) | (key<<24);
-			ma35d1_write_reg(dd, key, AES_KEY(i));
+			ma35_write_reg(dd, key, AES_KEY(i));
 		}
 	}
 
 	/* clear AES IV registers */
 	for (i = 0; i < 4; i++)
-		ma35d1_write_reg(dd, 0, AES_IV(i));
+		ma35_write_reg(dd, 0, AES_IV(i));
 
-	ma35d1_write_reg(dd, ma35d1_read_reg(dd, INTEN) | (INTEN_AESIEN | INTEN_AESEIEN), INTEN);
-	ma35d1_write_reg(dd, 0, AES_CTL);
-	ma35d1_write_reg(dd, (INTSTS_AESIF | INTSTS_AESEIF), INTSTS);
+	ma35_write_reg(dd, ma35_read_reg(dd, INTEN) | (INTEN_AESIEN | INTEN_AESEIEN), INTEN);
+	ma35_write_reg(dd, 0, AES_CTL);
+	ma35_write_reg(dd, (INTSTS_AESIF | INTSTS_AESEIF), INTSTS);
 
-	ma35d1_write_reg(dd, 12, AES_GCM_IVCNT(0));
-	ma35d1_write_reg(dd, req->assoclen, AES_GCM_ACNT(0));
-	ma35d1_write_reg(dd, req->cryptlen, AES_GCM_PCNT(0));
+	ma35_write_reg(dd, 12, AES_GCM_IVCNT(0));
+	ma35_write_reg(dd, req->assoclen, AES_GCM_ACNT(0));
+	ma35_write_reg(dd, req->cryptlen, AES_GCM_PCNT(0));
 
-	ma35d1_write_reg(dd, (ctx->keysz_sel | ctx->mode | AES_CTL_INSWAP | AES_CTL_OUTSWAP |
+	ma35_write_reg(dd, (ctx->keysz_sel | ctx->mode | AES_CTL_INSWAP | AES_CTL_OUTSWAP |
 		       AES_CTL_KOUTSWAP | AES_CTL_DMAEN), AES_CTL);
 
 	pr_debug("[%s] - mode: 0x%08x, AES_CTL = 0x%x\n", __func__,
-		 ctx->mode, ma35d1_read_reg(dd, AES_CTL));
+		 ctx->mode, ma35_read_reg(dd, AES_CTL));
 
-	return ma35d1_aes_dma_run(dd, 0);
+	return ma35_aes_dma_run(dd, 0);
 }
 
 
-static int ma35d1_aes_gcm_crypt(struct aead_request *req, u32 mode)
+static int ma35_aes_gcm_crypt(struct aead_request *req, u32 mode)
 {
 	struct nu_aes_base_ctx *ctx = crypto_aead_ctx(crypto_aead_reqtfm(req));
 	struct nu_aes_dev *aes_dd;
 
-	aes_dd = ma35d1_aes_find_dev(ctx);
+	aes_dd = ma35_aes_find_dev(ctx);
 	if (!aes_dd)
 		return -ENODEV;
 
 	ctx->mode = AES_MODE_GCM | mode;
 
-	return ma35d1_aes_handle_queue(aes_dd, &req->base);
+	return ma35_aes_handle_queue(aes_dd, &req->base);
 }
 
-static int ma35d1_aes_gcm_encrypt(struct aead_request *req)
+static int ma35_aes_gcm_encrypt(struct aead_request *req)
 {
-	return ma35d1_aes_gcm_crypt(req, AES_CTL_ENCRPT);
+	return ma35_aes_gcm_crypt(req, AES_CTL_ENCRPT);
 }
 
-static int ma35d1_aes_gcm_decrypt(struct aead_request *req)
+static int ma35_aes_gcm_decrypt(struct aead_request *req)
 {
-	return ma35d1_aes_gcm_crypt(req, 0);
+	return ma35_aes_gcm_crypt(req, 0);
 }
 
-static int ma35d1_aes_gcm_setkey(struct crypto_aead *tfm, const u8 *key, unsigned int keylen)
+static int ma35_aes_gcm_setkey(struct crypto_aead *tfm, const u8 *key, unsigned int keylen)
 {
 	struct nu_aes_base_ctx *ctx = crypto_aead_ctx(tfm);
 
@@ -792,7 +792,7 @@ static int ma35d1_aes_gcm_setkey(struct crypto_aead *tfm, const u8 *key, unsigne
 	return 0;
 }
 
-static int ma35d1_aes_gcm_setauthsize(struct crypto_aead *aead, u32 authsize)
+static int ma35_aes_gcm_setauthsize(struct crypto_aead *aead, u32 authsize)
 {
 	struct nu_aes_base_ctx *ctx = crypto_aead_ctx(aead);
 
@@ -800,33 +800,33 @@ static int ma35d1_aes_gcm_setauthsize(struct crypto_aead *aead, u32 authsize)
 	return 0;
 }
 
-static int ma35d1_aes_gcm_init(struct crypto_aead *aead)
+static int ma35_aes_gcm_init(struct crypto_aead *aead)
 {
 	struct nu_aes_ctx *ctx = crypto_aead_ctx(aead);
 	struct nu_aes_dev *aes_dd;
 
-	ctx->base.start = ma35d1_aes_gcm_dma_start;
+	ctx->base.start = ma35_aes_gcm_dma_start;
 
-	aes_dd = ma35d1_aes_find_dev(&ctx->base);
+	aes_dd = ma35_aes_find_dev(&ctx->base);
 	if (!aes_dd)
 		return -ENODEV;
 
 	return 0;
 }
 
-static struct aead_alg  ma35d1_aes_gcm_alg[] = {
+static struct aead_alg  ma35_aes_gcm_alg[] = {
 {
-	.setkey		= ma35d1_aes_gcm_setkey,
-	.setauthsize	= ma35d1_aes_gcm_setauthsize,
-	.encrypt	= ma35d1_aes_gcm_encrypt,
-	.decrypt	= ma35d1_aes_gcm_decrypt,
-	.init		= ma35d1_aes_gcm_init,
+	.setkey		= ma35_aes_gcm_setkey,
+	.setauthsize	= ma35_aes_gcm_setauthsize,
+	.encrypt	= ma35_aes_gcm_encrypt,
+	.decrypt	= ma35_aes_gcm_decrypt,
+	.init		= ma35_aes_gcm_init,
 	.ivsize		= GCM_AES_IV_SIZE,
 	.maxauthsize	= AES_BLOCK_SIZE,
 	.base = {
 		.cra_name		= "gcm(aes)",
-		.cra_driver_name	= "ma35d1-gcm-aes",
-		.cra_priority		= 400,
+		.cra_driver_name	= "ma35-gcm-aes",
+		.cra_priority		= MA35_CRA_PRIORITY,
 		.cra_flags		= CRYPTO_ALG_ASYNC,
 		.cra_blocksize		= 1,
 		.cra_ctxsize		= sizeof(struct nu_aes_ctx),
@@ -841,7 +841,7 @@ static struct aead_alg  ma35d1_aes_gcm_alg[] = {
 /*  AES CCM mode                                                           */
 /*                                                                         */
 /*-------------------------------------------------------------------------*/
-static int ma35d1_aes_ccm_dma_start(struct nu_aes_dev *dd, int err)
+static int ma35_aes_ccm_dma_start(struct nu_aes_dev *dd, int err)
 {
 	struct aead_request *req = aead_request_cast(dd->areq);
 	struct nu_aes_base_ctx *ctx = dd->ctx;
@@ -916,7 +916,7 @@ static int ma35d1_aes_ccm_dma_start(struct nu_aes_dev *dd, int err)
 		b[1] = (unsigned char)(alen & 0xFF);
 
 		use_len = (len_left < (16 - 2)) ? len_left : 16 - 2;
-		ma35d1_aes_sg_to_buffer(dd, b + 2, use_len);
+		ma35_aes_sg_to_buffer(dd, b + 2, use_len);
 
 		len_left -= use_len;
 		b += 16;
@@ -924,7 +924,7 @@ static int ma35d1_aes_ccm_dma_start(struct nu_aes_dev *dd, int err)
 		while (len_left > 0) {
 			use_len = len_left > 16 ? 16 : len_left;
 			memset(b, 0, 16);
-			ma35d1_aes_sg_to_buffer(dd, b, use_len);
+			ma35_aes_sg_to_buffer(dd, b, use_len);
 			b += 16;
 			len_left -= use_len;
 		}
@@ -944,7 +944,7 @@ static int ma35d1_aes_ccm_dma_start(struct nu_aes_dev *dd, int err)
 
 			/* naturally padding zero if len_left < 16 */
 			memset(b, 0, 16);
-			ma35d1_aes_sg_to_buffer(dd, b, use_len);
+			ma35_aes_sg_to_buffer(dd, b, use_len);
 			b += 16;
 			len_left -= use_len;
 			p_blk_cnt++;
@@ -956,7 +956,7 @@ static int ma35d1_aes_ccm_dma_start(struct nu_aes_dev *dd, int err)
 	 *  We should compare this tag with the CCM decrypt output tag.
 	 */
 	if (!(ctx->mode & AES_CTL_ENCRPT)) {
-		q = ma35d1_aes_sg_to_buffer(dd, ctx->tag,
+		q = ma35_aes_sg_to_buffer(dd, ctx->tag,
 					  ((ctx->authsize > 16) ? 16 : ctx->authsize));
 		pr_debug("[%s] - CCM read tag return length: %d/%d\n", __func__,
 			 q, ctx->authsize);
@@ -975,63 +975,63 @@ static int ma35d1_aes_ccm_dma_start(struct nu_aes_dev *dd, int err)
 
 	/* program AES IV registers */
 	for (i = 0; i < 4; i++)
-		ma35d1_write_reg(dd, *((u32 *)&ctr[i*4]), AES_IV(i));
+		ma35_write_reg(dd, *((u32 *)&ctr[i*4]), AES_IV(i));
 
 	if (ctx->keylen == AES_KS_KEYLEN) {
 		/* configure AES Key from Key Store */
 		u8  *key = (u8 *)ctx->aes_key;
 
-		ma35d1_write_reg(dd, (key[1] << 7) | AES_KSCTL_RSRC | key[2], AES_KSCTL);
+		ma35_write_reg(dd, (key[1] << 7) | AES_KSCTL_RSRC | key[2], AES_KSCTL);
 	} else {
 		/* program AES key */
-		ma35d1_write_reg(dd, 0, AES_KSCTL);
+		ma35_write_reg(dd, 0, AES_KSCTL);
 		for (i = 0; i < ctx->keylen/4; i++)
-			ma35d1_write_reg(dd, ctx->aes_key[i], AES_KEY(i));
+			ma35_write_reg(dd, ctx->aes_key[i], AES_KEY(i));
 	}
 
-	ma35d1_write_reg(dd, ma35d1_read_reg(dd, INTEN) | (INTEN_AESIEN | INTEN_AESEIEN), INTEN);
-	ma35d1_write_reg(dd, 0, AES_CTL);
-	ma35d1_write_reg(dd, (INTSTS_AESIF | INTSTS_AESEIF), INTSTS);
+	ma35_write_reg(dd, ma35_read_reg(dd, INTEN) | (INTEN_AESIEN | INTEN_AESEIEN), INTEN);
+	ma35_write_reg(dd, 0, AES_CTL);
+	ma35_write_reg(dd, (INTSTS_AESIF | INTSTS_AESEIF), INTSTS);
 
-	ma35d1_write_reg(dd, 0, AES_GCM_IVCNT(0));
-	ma35d1_write_reg(dd, (dd->dma_len - (p_blk_cnt * 16)), AES_GCM_ACNT(0));
-	ma35d1_write_reg(dd, ctx->text_len, AES_GCM_PCNT(0));
+	ma35_write_reg(dd, 0, AES_GCM_IVCNT(0));
+	ma35_write_reg(dd, (dd->dma_len - (p_blk_cnt * 16)), AES_GCM_ACNT(0));
+	ma35_write_reg(dd, ctx->text_len, AES_GCM_PCNT(0));
 
-	ma35d1_write_reg(dd, (ctx->keysz_sel | ctx->mode | AES_CTL_INSWAP | AES_CTL_OUTSWAP |
+	ma35_write_reg(dd, (ctx->keysz_sel | ctx->mode | AES_CTL_INSWAP | AES_CTL_OUTSWAP |
 			    AES_CTL_KINSWAP | AES_CTL_KOUTSWAP | AES_CTL_DMAEN), AES_CTL);
 
 	pr_debug("[%s] - mode: 0x%08x, AES_CTL = 0x%x\n", __func__, ctx->mode,
-		 ma35d1_read_reg(dd, AES_CTL));
+		 ma35_read_reg(dd, AES_CTL));
 
-	return ma35d1_aes_dma_run(dd, 0);
+	return ma35_aes_dma_run(dd, 0);
 }
 
 
-static int ma35d1_aes_ccm_crypt(struct aead_request *req, u32 mode)
+static int ma35_aes_ccm_crypt(struct aead_request *req, u32 mode)
 {
 	struct nu_aes_base_ctx *ctx = crypto_aead_ctx(crypto_aead_reqtfm(req));
 	struct nu_aes_dev *aes_dd;
 
-	aes_dd = ma35d1_aes_find_dev(ctx);
+	aes_dd = ma35_aes_find_dev(ctx);
 	if (!aes_dd)
 		return -ENODEV;
 
 	ctx->mode = AES_MODE_CCM | mode;
 
-	return ma35d1_aes_handle_queue(aes_dd, &req->base);
+	return ma35_aes_handle_queue(aes_dd, &req->base);
 }
 
-static int ma35d1_aes_ccm_encrypt(struct aead_request *req)
+static int ma35_aes_ccm_encrypt(struct aead_request *req)
 {
-	return ma35d1_aes_ccm_crypt(req, AES_CTL_ENCRPT);
+	return ma35_aes_ccm_crypt(req, AES_CTL_ENCRPT);
 }
 
-static int ma35d1_aes_ccm_decrypt(struct aead_request *req)
+static int ma35_aes_ccm_decrypt(struct aead_request *req)
 {
-	return ma35d1_aes_ccm_crypt(req, 0);
+	return ma35_aes_ccm_crypt(req, 0);
 }
 
-static int ma35d1_aes_ccm_setauthsize(struct crypto_aead *aead, u32 authsize)
+static int ma35_aes_ccm_setauthsize(struct crypto_aead *aead, u32 authsize)
 {
 	struct nu_aes_base_ctx *ctx = crypto_aead_ctx(aead);
 
@@ -1040,33 +1040,33 @@ static int ma35d1_aes_ccm_setauthsize(struct crypto_aead *aead, u32 authsize)
 	return 0;
 }
 
-static int ma35d1_aes_ccm_init(struct crypto_aead *aead)
+static int ma35_aes_ccm_init(struct crypto_aead *aead)
 {
 	struct nu_aes_ctx *ctx = crypto_aead_ctx(aead);
 	struct nu_aes_dev *aes_dd;
 
-	ctx->base.start = ma35d1_aes_ccm_dma_start;
+	ctx->base.start = ma35_aes_ccm_dma_start;
 
-	aes_dd = ma35d1_aes_find_dev(&ctx->base);
+	aes_dd = ma35_aes_find_dev(&ctx->base);
 	if (!aes_dd)
 		return -ENODEV;
 
 	return 0;
 }
 
-static struct aead_alg ma35d1_aes_ccm_alg[] = {
+static struct aead_alg ma35_aes_ccm_alg[] = {
 {
-	.setkey		= ma35d1_aes_gcm_setkey,  /* same routine as GCM */
-	.setauthsize	= ma35d1_aes_ccm_setauthsize,
-	.encrypt	= ma35d1_aes_ccm_encrypt,
-	.decrypt	= ma35d1_aes_ccm_decrypt,
-	.init		= ma35d1_aes_ccm_init,
+	.setkey		= ma35_aes_gcm_setkey,  /* same routine as GCM */
+	.setauthsize	= ma35_aes_ccm_setauthsize,
+	.encrypt	= ma35_aes_ccm_encrypt,
+	.decrypt	= ma35_aes_ccm_decrypt,
+	.init		= ma35_aes_ccm_init,
 	.ivsize		= AES_BLOCK_SIZE,
 	.maxauthsize	= AES_BLOCK_SIZE,
 	.base = {
 		.cra_name		= "ccm(aes)",
-		.cra_driver_name	= "ma35d1-ccm-aes",
-		.cra_priority		= 400,
+		.cra_driver_name	= "ma35-ccm-aes",
+		.cra_priority		= MA35_CRA_PRIORITY,
 		.cra_flags		= CRYPTO_ALG_ASYNC,
 		.cra_blocksize		= 1,
 		.cra_ctxsize		= sizeof(struct nu_aes_ctx),
@@ -1076,14 +1076,14 @@ static struct aead_alg ma35d1_aes_ccm_alg[] = {
 },
 };
 
-static void ma35d1_aes_queue_task(unsigned long data)
+static void ma35_aes_queue_task(unsigned long data)
 {
 	struct nu_aes_dev *dd = (struct nu_aes_dev *)data;
 
-	ma35d1_aes_handle_queue(dd, NULL);
+	ma35_aes_handle_queue(dd, NULL);
 }
 
-static void ma35d1_aes_done_task(unsigned long data)
+static void ma35_aes_done_task(unsigned long data)
 {
 	struct nu_aes_dev *dd = (struct nu_aes_dev *)data;
 
@@ -1093,36 +1093,36 @@ static void ma35d1_aes_done_task(unsigned long data)
 	(void)dd->resume(dd, 0);
 }
 
-static int ma35d1_register_gcm_ccm(struct device *dev)
+static int ma35_register_gcm_ccm(struct device *dev)
 {
 	int i, err;
 
 	/*
 	 *  Register AES GCM algorithms
 	 */
-	err = crypto_register_aeads(ma35d1_aes_gcm_alg, ARRAY_SIZE(ma35d1_aes_gcm_alg));
+	err = crypto_register_aeads(ma35_aes_gcm_alg, ARRAY_SIZE(ma35_aes_gcm_alg));
 	if (err) {
-		for (i = 0; i < ARRAY_SIZE(ma35d1_aes_algs); i++)
-			crypto_unregister_skcipher(&ma35d1_aes_algs[i]);
-		dev_err(dev, "Could not register ma35d1_aes_gcm_algs!\n");
+		for (i = 0; i < ARRAY_SIZE(ma35_aes_algs); i++)
+			crypto_unregister_skcipher(&ma35_aes_algs[i]);
+		dev_err(dev, "Could not register ma35_aes_gcm_algs!\n");
 		return err;
 	}
 
 	/*
 	 *  Register AES CCM algorithms
 	 */
-	err = crypto_register_aeads(ma35d1_aes_ccm_alg, ARRAY_SIZE(ma35d1_aes_ccm_alg));
+	err = crypto_register_aeads(ma35_aes_ccm_alg, ARRAY_SIZE(ma35_aes_ccm_alg));
 	if (err) {
-		for (i = 0; i < ARRAY_SIZE(ma35d1_aes_algs); i++)
-			crypto_unregister_skcipher(&ma35d1_aes_algs[i]);
-		crypto_unregister_aeads(ma35d1_aes_gcm_alg, ARRAY_SIZE(ma35d1_aes_gcm_alg));
-		dev_err(dev, "Could not register ma35d1_aes_ccm_algs!\n");
+		for (i = 0; i < ARRAY_SIZE(ma35_aes_algs); i++)
+			crypto_unregister_skcipher(&ma35_aes_algs[i]);
+		crypto_unregister_aeads(ma35_aes_gcm_alg, ARRAY_SIZE(ma35_aes_gcm_alg));
+		dev_err(dev, "Could not register ma35_aes_ccm_algs!\n");
 		return err;
 	}
 	return 0;
 }
 
-int ma35d1_aes_probe(struct device *dev, struct nu_crypto_dev *crypto_dev)
+int ma35_aes_probe(struct device *dev, struct nu_crypto_dev *crypto_dev)
 {
 	struct nu_aes_dev *aes_dd = &crypto_dev->aes_dd;
 	int i, err;
@@ -1135,8 +1135,8 @@ int ma35d1_aes_probe(struct device *dev, struct nu_crypto_dev *crypto_dev)
 	INIT_LIST_HEAD(&aes_dd->list);
 	spin_lock_init(&aes_dd->lock);
 
-	tasklet_init(&aes_dd->done_task, ma35d1_aes_done_task, (unsigned long)aes_dd);
-	tasklet_init(&aes_dd->queue_task, ma35d1_aes_queue_task, (unsigned long)aes_dd);
+	tasklet_init(&aes_dd->done_task, ma35_aes_done_task, (unsigned long)aes_dd);
+	tasklet_init(&aes_dd->queue_task, ma35_aes_queue_task, (unsigned long)aes_dd);
 
 	crypto_init_queue(&aes_dd->queue, 32);
 
@@ -1147,20 +1147,20 @@ int ma35d1_aes_probe(struct device *dev, struct nu_crypto_dev *crypto_dev)
 	/*
 	 *  Register AES/SM4 algorithms
 	 */
-	for (i = 0; i < ARRAY_SIZE(ma35d1_aes_algs); i++) {
-		err = crypto_register_skcipher(&ma35d1_aes_algs[i]);
+	for (i = 0; i < ARRAY_SIZE(ma35_aes_algs); i++) {
+		err = crypto_register_skcipher(&ma35_aes_algs[i]);
 		if (err) {
-			dev_err(dev, "Could not register ma35d1_aes_algs!\n");
+			dev_err(dev, "Could not register ma35_aes_algs!\n");
 			err = -EINVAL;
 			goto err_algs;
 		}
 	}
 
-	err = ma35d1_register_gcm_ccm(dev);
+	err = ma35_register_gcm_ccm(dev);
 	if (err)
 		goto err_algs;
 
-	pr_info("ma35d1 series crypto aes engine initialized.\n");
+	pr_info("ma35 series crypto aes engine initialized.\n");
 	return 0;
 
 err_algs:
@@ -1172,7 +1172,7 @@ err_algs:
 	return err;
 }
 
-int ma35d1_aes_remove(struct device *dev, struct nu_crypto_dev *crypto_dev)
+int ma35_aes_remove(struct device *dev, struct nu_crypto_dev *crypto_dev)
 {
 	struct nu_aes_dev *aes_dd = &crypto_dev->aes_dd;
 	int i;
@@ -1180,11 +1180,11 @@ int ma35d1_aes_remove(struct device *dev, struct nu_crypto_dev *crypto_dev)
 	if (aes_dd == NULL)
 		return -ENODEV;
 
-	for (i = 0; i < ARRAY_SIZE(ma35d1_aes_algs); i++)
-		crypto_unregister_skcipher(&ma35d1_aes_algs[i]);
+	for (i = 0; i < ARRAY_SIZE(ma35_aes_algs); i++)
+		crypto_unregister_skcipher(&ma35_aes_algs[i]);
 
-	crypto_unregister_aeads(ma35d1_aes_gcm_alg, ARRAY_SIZE(ma35d1_aes_gcm_alg));
-	crypto_unregister_aeads(ma35d1_aes_ccm_alg, ARRAY_SIZE(ma35d1_aes_ccm_alg));
+	crypto_unregister_aeads(ma35_aes_gcm_alg, ARRAY_SIZE(ma35_aes_gcm_alg));
+	crypto_unregister_aeads(ma35_aes_ccm_alg, ARRAY_SIZE(ma35_aes_ccm_alg));
 
 	spin_lock(&nu_aes.lock);
 	list_del(&aes_dd->list);

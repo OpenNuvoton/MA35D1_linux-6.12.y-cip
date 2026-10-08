@@ -735,8 +735,8 @@ config CRYPTO_DEV_ZYNQMP_SHA3
 	  Select this if you want to use the ZynqMP module
 	  for SHA3 hash computation.
 
-config CRYPTO_DEV_NUVOTON_MA35D1
-	bool "Nuvoton's MA35D1 Series Cryptographic Accelerator driver"
+config CRYPTO_DEV_NUVOTON_MA35
+	bool "Nuvoton's MA35 Series Cryptographic Accelerator driver"
 	default y
 	depends on ARCH_MA35D1 || ARCH_MA35D0 || ARCH_MA35H0
 	select CRYPTO_AES
