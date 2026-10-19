@@ -52,26 +52,6 @@
 #define RDA_TOUT_IF (RDA_IF | TOUT_IF)
 #define RDA_PTO_IF  (RDA_IF | PTO_IF)
 
-unsigned char UART_PDMA_TX_ID[UART_NR] = {
-	PDMA_UART0_TX, PDMA_UART1_TX, PDMA_UART2_TX,
-	PDMA_UART3_TX, PDMA_UART4_TX, PDMA_UART5_TX,
-	PDMA_UART6_TX, PDMA_UART7_TX, PDMA_UART8_TX,
-	PDMA_UART9_TX, PDMA_UART10_TX, PDMA_UART11_TX,
-	PDMA_UART12_TX, PDMA_UART13_TX, PDMA_UART14_TX,
-	PDMA_UART15_TX, PDMA_UART16_TX
-};
-
-#ifdef EN_UART_PDMA_RX
-unsigned char UART_PDMA_RX_ID[UART_NR] = {
-	PDMA_UART0_RX, PDMA_UART1_RX, PDMA_UART2_RX,
-	PDMA_UART3_RX, PDMA_UART4_RX, PDMA_UART5_RX,
-	PDMA_UART6_RX, PDMA_UART7_RX, PDMA_UART8_RX,
-	PDMA_UART9_RX, PDMA_UART10_RX, PDMA_UART11_RX,
-	PDMA_UART12_RX, PDMA_UART13_RX, PDMA_UART14_RX,
-	PDMA_UART15_RX, PDMA_UART16_RX
-};
-#endif
-
 static struct uart_driver ma35d1serial_reg;
 
 struct clk *clk;
@@ -89,7 +69,7 @@ struct uart_ma35d1_port {
 	struct serial_rs485 rs485;  /* rs485 settings */
 
 #ifdef EN_UART_PDMA_RX
-	unsigned char PDMA_UARTx_RX;
+	u32 pdma_reqsel_rx;
 	struct ma35d1_ip_rx_dma dma_rx;
 	struct ma35d1_mem_alloc dest_mem_p;
 	struct ma35d1_dma_done dma_Rx_done;
@@ -101,7 +81,7 @@ struct uart_ma35d1_port {
 	unsigned int pdma_time_out_prescaler;
 	unsigned int pdma_time_out_count;
 #endif
-	unsigned char PDMA_UARTx_TX;
+	u32 pdma_reqsel_tx;
 	struct ma35d1_ip_tx_dma dma_tx;
 	struct ma35d1_mem_alloc src_mem_p;
 	struct ma35d1_dma_done dma_slave_done;
@@ -347,15 +327,6 @@ static void ma35d1_Tx_dma_callback(void *arg)
 	uart_port_unlock_irqrestore(&p->port, flags);
 }
 
-static void set_pdma_flag(struct uart_ma35d1_port *p, int id)
-{
-	p->uart_pdma_enable_flag = 1;
-	p->PDMA_UARTx_TX = UART_PDMA_TX_ID[id];
-#ifdef EN_UART_PDMA_RX
-	p->PDMA_UARTx_RX = UART_PDMA_RX_ID[id];
-#endif
-}
-
 #ifdef EN_UART_PDMA_RX
 static void ma35d1_uart_cal_pdma_time_out(struct uart_ma35d1_port *p, unsigned int baud)
 {
@@ -472,7 +443,7 @@ static void ma35d1_prepare_RX_dma(struct uart_ma35d1_port *p)
 	pdma_rx->slave_config.direction = DMA_DEV_TO_MEM;
 	pdma_rx->slave_config.device_fc = false;
 
-	pcfg.reqsel = p->PDMA_UARTx_RX;
+	pcfg.reqsel = p->pdma_reqsel_rx;
 	pcfg.timeout_prescaler = p->pdma_time_out_prescaler;
 	pcfg.timeout_counter = p->pdma_time_out_count;
 
@@ -563,7 +534,7 @@ static void ma35d1_prepare_TX_dma(struct uart_ma35d1_port *p)
 	pdma_tx->slave_config.dst_addr_width = DMA_SLAVE_BUSWIDTH_1_BYTE;
 	pdma_tx->slave_config.dst_maxburst = 1;
 	pdma_tx->slave_config.direction = DMA_MEM_TO_DEV;
-	pcfg.reqsel = p->PDMA_UARTx_TX;	//schung
+	pcfg.reqsel = p->pdma_reqsel_tx;
 	pcfg.timeout_prescaler = 0;
 	pcfg.timeout_counter = 0;
 	pdma_tx->slave_config.peripheral_config = &pcfg;
@@ -1560,6 +1531,10 @@ static int ma35d1serial_probe(struct platform_device *pdev)
 	res_mem = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (!res_mem)
 		return -ENODEV;
+	if (i >= UART_NR) {
+		dev_err(&pdev->dev, "invalid port-number %d\n", i);
+		return -EINVAL;
+	}
 
 	up->port.iobase = res_mem->start;
 	up->port.membase = ioremap(up->port.iobase, 0x10000);
@@ -1585,8 +1560,26 @@ static int ma35d1serial_probe(struct platform_device *pdev)
 		return -EINVAL;
 	}
 
-	if (val32[0] == 1)
-		set_pdma_flag(up, i);
+	if (val32[0] == 1) {
+		ret = of_property_read_u32(pdev->dev.of_node,
+					   "nuvoton,pdma-reqsel-tx",
+					   &up->pdma_reqsel_tx);
+		if (ret) {
+			dev_err(&pdev->dev, "missing TX PDMA request selector\n");
+			return ret;
+		}
+
+#ifdef EN_UART_PDMA_RX
+		ret = of_property_read_u32(pdev->dev.of_node,
+					   "nuvoton,pdma-reqsel-rx",
+					   &up->pdma_reqsel_rx);
+		if (ret) {
+			dev_err(&pdev->dev, "missing RX PDMA request selector\n");
+			return ret;
+		}
+#endif
+		up->uart_pdma_enable_flag = 1;
+	}
 
 	up->wakeup_enable = 0;
 
