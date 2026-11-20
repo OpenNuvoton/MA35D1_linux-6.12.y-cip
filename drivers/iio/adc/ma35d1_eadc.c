@@ -328,8 +328,8 @@ static int ma35d1_adc_read_conversion(struct iio_dev *indio_dev,
 
 	ma35d1_adc_write(adc, MA35D1_EADC_SWTRG, 1);
 
-	timeout = wait_for_completion_interruptible_timeout(
-			&adc->completion, MA35D1_EADC_TIMEOUT);
+	timeout = MA35D1_EADC_TIMEOUT;
+	timeout = wait_for_completion_interruptible_timeout(&adc->completion, timeout);
 
 	ma35d1_adc_disable_irq(adc);
 
@@ -377,7 +377,7 @@ static int ma35d1_adc_validate_scan(struct iio_dev *indio_dev,
 	unsigned int count = 0;
 	unsigned long bit;
 
-	for_each_set_bit(bit, scan_mask, indio_dev->masklength) {
+	for_each_set_bit(bit, scan_mask, iio_get_masklength(indio_dev)) {
 		chan = &indio_dev->channels[bit];
 
 		if (chan->type == IIO_TIMESTAMP)
@@ -414,7 +414,7 @@ static int ma35d1_adc_update_scan_mode(struct iio_dev *indio_dev,
 	if (ret)
 		return ret;
 
-	for_each_set_bit(bit, scan_mask, indio_dev->masklength) {
+	for_each_set_bit(bit, scan_mask, iio_get_masklength(indio_dev)) {
 		chan = &indio_dev->channels[bit];
 
 		if (chan->type == IIO_TIMESTAMP)
@@ -497,8 +497,8 @@ static void ma35d1_adc_dma_buffer_done(void *data)
 			adc->scan.channels[i] =
 				samples[i] & MA35D1_EADC_DAT_MASK;
 
-		iio_push_to_buffers_with_timestamp(
-			indio_dev, &adc->scan, iio_get_time_ns(indio_dev));
+		iio_push_to_buffers_with_timestamp(indio_dev, &adc->scan,
+						   iio_get_time_ns(indio_dev));
 	}
 
 	adc->dma.period =
@@ -524,13 +524,12 @@ static int ma35d1_adc_dma_start(struct iio_dev *indio_dev)
 	if (ret)
 		return ret;
 
-	adc->dma.desc = dmaengine_prep_dma_cyclic(
-				adc->dma.chan,
-				adc->dma.dma_addr,
-				adc->dma.buffer_len,
-				adc->dma.period_len,
-				DMA_DEV_TO_MEM,
-				DMA_PREP_INTERRUPT | DMA_CTRL_ACK);
+	adc->dma.desc = dmaengine_prep_dma_cyclic(adc->dma.chan,
+						  adc->dma.dma_addr,
+						  adc->dma.buffer_len,
+						  adc->dma.period_len,
+						  DMA_DEV_TO_MEM,
+						  DMA_PREP_INTERRUPT | DMA_CTRL_ACK);
 	if (!adc->dma.desc)
 		return -EBUSY;
 
@@ -737,60 +736,52 @@ static int ma35d1_adc_parse_channels(struct iio_dev *indio_dev,
 		ret = fwnode_property_read_u32(child, "reg", &reg);
 		if (ret) {
 			fwnode_handle_put(child);
-			return dev_err_probe(
-				dev, ret, "missing channel reg property\n");
+			return dev_err_probe(dev, ret, "missing channel reg property\n");
 		}
 
 		if (reg >= MA35D1_EADC_MAX_CHANNELS) {
 			fwnode_handle_put(child);
-			return dev_err_probe(
-				dev, -EINVAL, "invalid ADC channel %u\n", reg);
+			return dev_err_probe(dev, -EINVAL, "invalid ADC channel %u\n", reg);
 		}
 
 		if (test_and_set_bit(reg, used_channels)) {
 			fwnode_handle_put(child);
-			return dev_err_probe(
-				dev, -EINVAL,
-				"duplicate ADC channel %u\n", reg);
+			return dev_err_probe(dev, -EINVAL,
+					     "duplicate ADC channel %u\n", reg);
 		}
 
 		if (fwnode_property_present(child, "diff-channels")) {
-			ret = fwnode_property_read_u32_array(
-					child, "diff-channels", diff,
-					ARRAY_SIZE(diff));
+			ret = fwnode_property_read_u32_array(child, "diff-channels", diff,
+							     ARRAY_SIZE(diff));
 			if (ret) {
 				fwnode_handle_put(child);
-				return dev_err_probe(
-					dev, ret,
-					"invalid diff-channels for channel %u\n",
-					reg);
+				return dev_err_probe(dev, ret,
+						     "invalid diff-channels for channel %u\n",
+						     reg);
 			}
 
 			if (diff[0] != reg ||
 			    diff[1] >= MA35D1_EADC_MAX_CHANNELS ||
 			    diff[0] == diff[1]) {
 				fwnode_handle_put(child);
-				return dev_err_probe(
-					dev, -EINVAL,
-					"invalid differential ADC channel %u-%u\n",
-					diff[0], diff[1]);
+				return dev_err_probe(dev, -EINVAL,
+						     "invalid differential ADC channel %u-%u\n",
+						     diff[0], diff[1]);
 			}
 
 			if (test_and_set_bit(diff[1], used_channels)) {
 				fwnode_handle_put(child);
-				return dev_err_probe(
-					dev, -EINVAL,
-					"ADC channel %u already used\n",
-					diff[1]);
+				return dev_err_probe(dev, -EINVAL,
+						     "ADC channel %u already used\n",
+						     diff[1]);
 			}
 
 			differential = true;
 		}
 
-		ma35d1_adc_init_channel(
-			adc, &channels[scan_index], reg,
-			differential ? diff[1] : 0,
-			scan_index, differential);
+		ma35d1_adc_init_channel(adc, &channels[scan_index], reg,
+					differential ? diff[1] : 0,
+					scan_index, differential);
 		scan_index++;
 	}
 
@@ -799,7 +790,6 @@ static int ma35d1_adc_parse_channels(struct iio_dev *indio_dev,
 
 	indio_dev->channels = channels;
 	indio_dev->num_channels = scan_index + 1;
-	indio_dev->masklength = indio_dev->num_channels;
 
 	return 0;
 }
@@ -810,8 +800,8 @@ static int ma35d1_adc_setup_trigger(struct iio_dev *indio_dev,
 	struct ma35d1_adc *adc = iio_priv(indio_dev);
 	int ret;
 
-	adc->trig = devm_iio_trigger_alloc(
-				dev, "%s-trigger", dev_name(dev));
+	adc->trig = devm_iio_trigger_alloc(dev, "%s-trigger",
+					   dev_name(dev));
 	if (!adc->trig)
 		return -ENOMEM;
 
@@ -944,18 +934,15 @@ static int ma35d1_adc_probe(struct platform_device *pdev)
 	mutex_init(&adc->lock);
 	init_completion(&adc->completion);
 
-	adc->regs = devm_platform_get_and_ioremap_resource(
-				pdev, 0, &res);
+	adc->regs = devm_platform_get_and_ioremap_resource(pdev, 0, &res);
 	if (IS_ERR(adc->regs))
-		return dev_err_probe(
-			dev, PTR_ERR(adc->regs),
-			"failed to map registers\n");
+		return dev_err_probe(dev, PTR_ERR(adc->regs),
+				     "failed to map registers\n");
 
 	adc->clk = devm_clk_get_enabled(dev, NULL);
 	if (IS_ERR(adc->clk))
-		return dev_err_probe(
-			dev, PTR_ERR(adc->clk),
-			"failed to get and enable ADC clock\n");
+		return dev_err_probe(dev, PTR_ERR(adc->clk),
+				     "failed to get and enable ADC clock\n");
 
 	indio_dev->name = "ma35d1-eadc";
 	indio_dev->modes = INDIO_DIRECT_MODE | INDIO_BUFFER_TRIGGERED;
@@ -975,8 +962,7 @@ static int ma35d1_adc_probe(struct platform_device *pdev)
 	 * Register after DMA setup so this action runs before the devres-managed
 	 * DMA channel is released.
 	 */
-	ret = devm_add_action_or_reset(
-			dev, ma35d1_adc_hw_disable, adc);
+	ret = devm_add_action_or_reset(dev, ma35d1_adc_hw_disable, adc);
 	if (ret)
 		return ret;
 
@@ -993,25 +979,20 @@ static int ma35d1_adc_probe(struct platform_device *pdev)
 	ret = devm_request_irq(dev, irq, ma35d1_adc_isr, 0,
 			       dev_name(dev), indio_dev);
 	if (ret)
-		return dev_err_probe(
-			dev, ret, "failed to request IRQ %d\n", irq);
+		return dev_err_probe(dev, ret, "failed to request IRQ %d\n", irq);
 
-	ret = devm_iio_triggered_buffer_setup(
-			dev, indio_dev,
-			iio_pollfunc_store_time,
-			ma35d1_adc_trigger_handler,
-			&ma35d1_adc_buffer_ops);
+	ret = devm_iio_triggered_buffer_setup(dev, indio_dev,
+					      iio_pollfunc_store_time,
+					      ma35d1_adc_trigger_handler,
+					      &ma35d1_adc_buffer_ops);
 	if (ret)
-		return dev_err_probe(
-			dev, ret,
-			"failed to setup triggered buffer\n");
+		return dev_err_probe(dev, ret, "failed to setup triggered buffer\n");
 
 	platform_set_drvdata(pdev, indio_dev);
 
 	ret = devm_iio_device_register(dev, indio_dev);
 	if (ret)
-		return dev_err_probe(
-			dev, ret, "failed to register IIO device\n");
+		return dev_err_probe(dev, ret, "failed to register IIO device\n");
 
 	return 0;
 }
