@@ -768,7 +768,7 @@ static int ma35_nand_attach_chip(struct nand_chip *chip)
 		/*
 		 * Keep the subpage callbacks available for validation, but do not
 		 * expose subpage access until the implementation is fully verified.
-		*/
+		 */
 		chip->options |= NAND_NO_SUBPAGE_WRITE | NAND_USES_DMA;
 		chip->ecc.write_subpage = ma35_nand_write_subpage_hwecc;
 		chip->ecc.read_subpage = ma35_nand_read_subpage_hwecc;
@@ -939,10 +939,10 @@ static void ma35_chips_cleanup(struct ma35_nand_info *nand)
 
 static int ma35_nand_chips_init(struct device *dev, struct ma35_nand_info *nand)
 {
-	struct device_node *np = dev->of_node, *nand_np;
+	struct device_node *np = dev->of_node;
 	int ret;
 
-	for_each_child_of_node(np, nand_np) {
+	for_each_child_of_node_scoped(np, nand_np) {
 		ret = ma35_nand_chip_init(dev, nand, nand_np);
 		if (ret) {
 			ma35_chips_cleanup(nand);
