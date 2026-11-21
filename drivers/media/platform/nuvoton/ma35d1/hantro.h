@@ -54,9 +54,8 @@ struct hantro_codec_ops;
 #define HANTRO_MPEG2_DECODER	BIT(16)
 #define HANTRO_VP8_DECODER	BIT(17)
 #define HANTRO_H264_DECODER	BIT(18)
-#define HANTRO_JPEG_DECODER	BIT(19)	
+#define HANTRO_JPEG_DECODER	BIT(19)
 #define HANTRO_DECODERS		0xffff0000
-
 
 /*
  *  PP parameters of H264/JPEG context
@@ -81,14 +80,14 @@ struct vc8k_pp_params {
 	int   resserved[8];
 };
 
-#define VC8KIOC_PP_SET_CONFIG	_IOW ('v', 91, struct vc8k_pp_params)
-#define VC8KIOC_PP_GET_CONFIG	_IOW ('v', 92, struct vc8k_pp_params)
+#define VC8KIOC_PP_SET_CONFIG	_IOW('v', 91, struct vc8k_pp_params)
+#define VC8KIOC_PP_GET_CONFIG	_IOW('v', 92, struct vc8k_pp_params)
 
 /*
  *  VC8000 device & driver configuration
  */
 struct vc8k_config {
-        struct vc8k_pp_params  ppc;  /* default PP config                     */
+	struct vc8k_pp_params  ppc;  /* default PP config                     */
 	int   fb_width;              /* frame buffer width from devcie tree   */
 	int   fb_height;             /* frame buffer height from device tree  */
 	int   fb_fmt;                /* frame buffer color format             */
@@ -96,11 +95,10 @@ struct vc8k_config {
 	int   have_res_mem;          /* has reserved memory or not            */
 	int   use_dev_coherent;      /* use device coherent memory            */
 	int   debug_level;           /* debug message control 0: no message */
-        phys_addr_t  res_mem_base;
-        char __iomem *res_mem_virt;
-        size_t  res_mem_size;
+	phys_addr_t  res_mem_base;
+	char *res_mem_virt;
+	size_t  res_mem_size;
 };
-
 
 /**
  * struct hantro_irq - irq handler and name
@@ -248,7 +246,7 @@ struct hantro_dev {
 	void __iomem *ctrl_base;
 	void __iomem *dcultra_base;
 
-	struct mutex  lock;
+	struct mutex lock;	/* Serializes H264 decoding */
 	struct vc8k_config  vc8k_cfg;
 	struct mutex vpu_mutex;	/* video_device lock */
 	spinlock_t irqlock;
@@ -346,7 +344,6 @@ struct hantro_reg {
 	u32 shift;
 	u32 mask;
 };
-
 
 /* Logging helpers */
 
@@ -449,26 +446,25 @@ static inline u32 vc8k_read_swreg(u32 swreg)
 	return readl_relaxed(_vc8k_vpu->dec_base + (swreg * 4));
 }
 
-extern int  ma35d1_vc8k_init(struct hantro_dev *vpu);
-extern void ma35d1_vc8k_exit(struct hantro_dev *vpu);
+int ma35d1_vc8k_init(struct hantro_dev *vpu);
+void ma35d1_vc8k_exit(struct hantro_dev *vpu);
 
-extern int VC8K_PreAllocDMABuff(struct device *dev, struct hantro_dev *vpu);
-extern void VC8K_ReleaseDMABuff(struct device *dev);
+int VC8K_PreAllocDMABuff(struct device *dev, struct hantro_dev *vpu);
+void VC8K_ReleaseDMABuff(struct device *dev);
 
-extern int  ma35d1_h264_dec_init(struct hantro_ctx *ctx);
-extern int  ma35d1_h264_dec_run(struct hantro_ctx *ctx);
-extern void ma35d1_h264_dec_exit(struct hantro_ctx *ctx);
+int ma35d1_h264_dec_init(struct hantro_ctx *ctx);
+int ma35d1_h264_dec_run(struct hantro_ctx *ctx);
+void ma35d1_h264_dec_exit(struct hantro_ctx *ctx);
 
-extern int ma35d1_jpeg_dec_init(struct hantro_ctx *ctx);
-extern int ma35d1_jpeg_dec_run(struct hantro_ctx *ctx);
-extern void ma35d1_jpeg_dec_exit(struct hantro_ctx *ctx);
+int ma35d1_jpeg_dec_init(struct hantro_ctx *ctx);
+int ma35d1_jpeg_dec_run(struct hantro_ctx *ctx);
+void ma35d1_jpeg_dec_exit(struct hantro_ctx *ctx);
 
-extern int ma35d1_pp_init(struct hantro_ctx *ctx);
-extern int ma35d1_pp_run(struct hantro_ctx *ctx);
+int ma35d1_pp_init(struct hantro_ctx *ctx);
+int ma35d1_pp_run(struct hantro_ctx *ctx);
 
-extern int vc_hw_engine_init(struct hantro_dev *vpu);
-extern long vc_hw_engine_command(unsigned int command, void *argument);
-extern void vc_hw_engine_irq(void);
-
+int vc_hw_engine_init(struct hantro_dev *vpu);
+long vc_hw_engine_command(unsigned int command, void *argument);
+void vc_hw_engine_irq(void);
 
 #endif /* HANTRO_H_ */
