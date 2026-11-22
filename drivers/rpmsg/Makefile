@@ -13,3 +13,4 @@ obj-$(CONFIG_RPMSG_QCOM_SMD)	+= qcom_smd.o
 obj-$(CONFIG_RPMSG_VIRTIO)	+= virtio_rpmsg_bus.o
 obj-$(CONFIG_MA35D1_AMPM)	+= ma35d1_ampm.o
 obj-$(CONFIG_MA35_AMP)		+= ma35_amp.o
+obj-$(CONFIG_MA35D1_RPMSG)	+= ma35d1_rpmsg.o

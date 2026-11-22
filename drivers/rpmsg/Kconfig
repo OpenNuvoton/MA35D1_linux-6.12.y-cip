@@ -109,4 +109,20 @@ config MA35_AMP
 	  providing communication channels between dual A35 cores in
 	  MA35 platforms for remote processor communication.
 
+config MA35D1_RPMSG
+	tristate "MA35D1 Shared Memory Driver"
+	depends on ARCH_MA35D1 && MFD_MA35D1 && NET
+	select MAILBOX
+	select MA35D1_WORMHOLE
+	select RPMSG
+	select RPMSG_CTRL
+	select RPMSG_CHAR
+	help
+	  Say y here to enable the MA35D1 shared-memory RPMsg driver.
+	  This driver uses the wormhole mailbox to communicate between
+	  the A35 core and the MCU. If unsure, say N.
+
+	  To build this driver as a module, choose M here. The module
+	  will be called ma35d1_rpmsg.
+
 endmenu
