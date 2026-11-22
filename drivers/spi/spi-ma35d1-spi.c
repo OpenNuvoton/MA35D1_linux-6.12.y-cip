@@ -557,9 +557,9 @@ static int ma35d1_spi_dma_transfer(struct ma35d1_spi *hw,
 	reinit_completion(&hw->dma_tx_done);
 
 	rxdesc = dmaengine_prep_slave_sg(hw->dma_rx,
-					xfer->rx_sg.sgl, xfer->rx_sg.nents,
-					DMA_DEV_TO_MEM,
-					DMA_PREP_INTERRUPT | DMA_CTRL_ACK);
+					 xfer->rx_sg.sgl, xfer->rx_sg.nents,
+					 DMA_DEV_TO_MEM,
+					 DMA_PREP_INTERRUPT | DMA_CTRL_ACK);
 	if (!rxdesc)
 		return -EIO;
 
@@ -576,9 +576,9 @@ static int ma35d1_spi_dma_transfer(struct ma35d1_spi *hw,
 	 * dma_async_issue_pending() is called below.
 	 */
 	txdesc = dmaengine_prep_slave_sg(hw->dma_tx,
-					xfer->tx_sg.sgl, xfer->tx_sg.nents,
-					DMA_MEM_TO_DEV,
-					DMA_PREP_INTERRUPT | DMA_CTRL_ACK);
+					 xfer->tx_sg.sgl, xfer->tx_sg.nents,
+					 DMA_MEM_TO_DEV,
+					 DMA_PREP_INTERRUPT | DMA_CTRL_ACK);
 	if (!txdesc) {
 		ret = -EIO;
 		goto err_terminate;
@@ -857,9 +857,9 @@ static int ma35d1_spi_hw_init(struct ma35d1_spi *hw)
 	ma35d1_spi_write(hw, MA35D1_SPI_FIFOCTL, fifoctl);
 
 	fifoctl2 = FIELD_PREP(MA35D1_SPI_FIFOCTL2_TXTHPDMA_MASK,
-			       MA35D1_SPI_FIFO_THRESHOLD) |
+			      MA35D1_SPI_FIFO_THRESHOLD) |
 		   FIELD_PREP(MA35D1_SPI_FIFOCTL2_RXTHPDMA_MASK,
-			       MA35D1_SPI_FIFO_THRESHOLD);
+			      MA35D1_SPI_FIFO_THRESHOLD);
 	ma35d1_spi_write(hw, MA35D1_SPI_FIFOCTL2, fifoctl2);
 
 	ret = ma35d1_spi_reset_fifos(hw);
@@ -925,7 +925,7 @@ static int ma35d1_spi_probe(struct platform_device *pdev)
 	ctlr->min_speed_hz = DIV_ROUND_UP(hw->parent_rate,
 					  MA35D1_SPI_CLKDIV_MAX + 1);
 	ctlr->max_speed_hz = min_t(u32, hw->parent_rate / 2,
-					   MA35D1_SPI_MAX_MASTER_HZ);
+				   MA35D1_SPI_MAX_MASTER_HZ);
 	ctlr->set_cs = ma35d1_spi_set_cs;
 	ctlr->transfer_one = ma35d1_spi_transfer_one;
 	ctlr->handle_err = ma35d1_spi_handle_err;
