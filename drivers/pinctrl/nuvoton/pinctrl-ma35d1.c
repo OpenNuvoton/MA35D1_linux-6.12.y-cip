@@ -1771,16 +1771,15 @@ static const struct of_device_id ma35d1_pinctrl_of_match[] = {
 	{}
 };
 
-const struct dev_pm_ops ma35d1_pinctrl_pm_ops = {
+static const struct dev_pm_ops ma35d1_pinctrl_pm_ops = {
 	SET_LATE_SYSTEM_SLEEP_PM_OPS(nvt_pinctrl_suspend,
-					nvt_pinctrl_resume)
+				     nvt_pinctrl_resume)
 };
 
 static int ma35d1_pinctrl_probe(struct platform_device *pdev)
 {
 	return nvt_pinctrl_probe(pdev, &ma35d1_pinctrl_info);
 }
-
 
 static struct platform_driver ma35d1_pinctrl_driver = {
 	.driver = {
