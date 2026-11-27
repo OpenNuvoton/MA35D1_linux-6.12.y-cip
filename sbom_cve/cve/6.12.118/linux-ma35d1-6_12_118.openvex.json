@@ -1,0 +1,1113 @@
+{
+  "@context": "https://openvex.dev/ns/v0.2.0",
+  "@id": "urn:uuid:f1d7d998-9551-56c1-9c59-8e0744e3f47d",
+  "author": "MA35D1 CVE review",
+  "role": "Engineering assessment (public stable/CIP and supplied defconfig only; not a BSP release attestation)",
+  "timestamp": "2026-11-27T04:32:48Z",
+  "version": 1,
+  "statements": [
+    {
+      "vulnerability": {
+        "name": "CVE-2024-58015"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "status_notes": "CVE-2024-58015 affects only the Qualcomm ath12k wireless driver located in drivers/net/wireless/ath/ath12k/. The target kernel is within the affected upstream release range and has not been fixed by the official Linux stable release. However, the MA35D1 product does not include the ath12k driver in its kernel configuration (CONFIG_ATH12K is not enabled). Therefore, the vulnerable component is not present in the delivered product."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2025-4598"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "status_notes": "CVE-2025-4598 affects the userspace systemd-coredump component rather than the Linux kernel. The delivered kernel product does not include or implement the vulnerable systemd-coredump functionality. Therefore, the vulnerable component is not present in the delivered product."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2025-21949"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "status_notes": "CVE-2025-21949 affects the LoongArch architecture's hugetlb mmap base-address alignment logic (arch/loongarch/mm/hugetlbpage.c). MA35D1 uses the ARM64 architecture (CONFIG_ARCH_MA35D1=y); the LoongArch architecture code is not compiled into the MA35D1 kernel at all. Therefore the vulnerable code path is not present in the delivered product."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2025-37880"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "status_notes": "CVE-2025-37880 affects the User Mode Linux (UML) implementation in arch/um/, specifically the time-travel execution mode. The target kernel version 6.12.95 does not contain the official fix. However, the MA35D1 product does not build or execute the User Mode Linux architecture (CONFIG_UML is not enabled). Therefore, the vulnerable UML component is not present in the delivered product."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2025-38036"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "status_notes": "CVE-2025-38036 affects the Intel Xe graphics driver when operating as an SR-IOV virtual function. The target kernel version 6.12.95 does not contain the official fix. However, the MA35D1 platform does not include Intel Xe graphics hardware or the associated Xe SR-IOV VF driver. Therefore, the vulnerable component is not present in the delivered product."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2025-38311"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "status_notes": "CVE-2025-38311 affects the Intel iavf virtual Ethernet driver. The target kernel does not contain the official fix. However, the MA35D1 product does not include the Intel iavf driver or Intel Virtual Function Ethernet hardware. The matched CONFIG_CAN entry is a keyword-matching false positive unrelated to the vulnerable component. Therefore, the vulnerable component is not present in the delivered product."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2025-71117"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "affected",
+      "action_statement": "The vulnerability affects the target product. Remediation should be performed by applying an equivalent backport or upgrading to a kernel release containing the official fix.",
+      "status_notes": "CVE-2025-71117 affects the Linux block layer request queue handling. The target kernel does not contain the official fix. The block layer is a core kernel component and the vulnerable code path may be present in the delivered product. Therefore, the delivered product is considered affected by this vulnerability until the official upstream fix is applied."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2025-71202"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "status_notes": "CVE-2025-71202 affects the x86-specific IOMMU Shared Virtual Addressing implementation and its handling of the CPU kernel address space. The target kernel does not contain the official fix. However, the MA35D1 product is based on the Arm64 architecture and does not include the affected x86-specific implementation. The matched CONFIG_CAN entry is a keyword-matching false positive unrelated to the vulnerable component. Therefore, the vulnerable component is not present in the delivered product."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2025-71302"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "status_notes": "CVE-2025-71302 affects the Panthor DRM driver for Arm Mali GPUs. The target kernel does not contain the official fix. However, the MA35D1 product does not include an Arm Mali GPU or the associated Panthor driver. The enabled CONFIG_DRM option provides the generic DRM framework and does not imply that the vulnerable Panthor driver is present. Therefore, the vulnerable component is not present in the delivered product."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2025-71315"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "status_notes": "CVE-2025-71315 affects the DRM VKMS (Virtual Kernel Mode-Setting) driver. CONFIG_DRM_VKMS is not enabled; MA35D1 uses its own display controller driver, not the virtual VKMS test driver. The official upstream fix (first released in 4.19) is not present in Linux 6.12.96, but since the vulnerable component is not built into the MA35D1 kernel configuration, the vulnerable code path cannot be reached. Therefore the vulnerable component is not present in the delivered product."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-23102"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "status_notes": "CVE-2026-23102 affects restoration of Scalable Vector Extension (SVE) and Scalable Matrix Extension (SME) signal context on Arm64 systems that implement SVE/SME. The MA35D1 Cortex-A35 processor does not implement the Arm SVE or SME extensions. Therefore, the vulnerable component is not present in the delivered product."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-23152"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "affected",
+      "action_statement": "The vulnerability affects the target product. Remediation should be performed by applying an equivalent backport or upgrading to a kernel release containing the official fix.",
+      "status_notes": "CVE-2026-23152 affects the mac80211 wireless networking subsystem when decoding Multi-Link Operation TTLM elements. The target kernel does not contain the official fix. The mac80211 framework is enabled in the delivered product. Therefore, the delivered product is considered affected by this vulnerability until the official upstream fix is applied."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-23348"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "status_notes": "CVE-2026-23348 affects the Compute Express Link (CXL) persistent-memory subsystem. The target kernel version 6.12.95 does not contain the official fix. However, the MA35D1 has no CXL hardware interface, and the CXL subsystem is not enabled in the product kernel. The CONFIG_CAN match is an unrelated keyword-matching false positive. Therefore, the vulnerable component is not present in the delivered product."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-31435"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "status_notes": "CVE-2026-31435 affects the Linux netfs read-retry and subrequest-abandonment implementation. The target kernel does not contain the official upstream fix. However, the netfs library and the network filesystem functionality that depends on it are not used in the MA35D1 product kernel. Therefore, the vulnerable component is not present in the delivered product."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-31568"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "status_notes": "CVE-2026-31568 affects the IBM s390 secure storage memory management implementation. The target kernel version 6.12.95 does not contain the official fix. However, the MA35D1 product is based on the Arm64 architecture and does not include the s390 architecture-specific code. The CONFIG_CAN match is an unrelated keyword-matching false positive. Therefore, the vulnerable component is not present in the delivered product."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-31692"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "status_notes": "CVE-2026-31692 affects rtnetlink when creating paired network devices such as veth, vxcan, and netkit. The target kernel does not contain the official upstream fix. However, the paired network device drivers required to trigger the vulnerability are not enabled in the MA35D1 product kernel. Therefore, the vulnerable component is not present in the delivered product."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-31777"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "status_notes": "CVE-2026-31777 affects the ALSA Creative Sound Blaster X-Fi (ctxfi) PCI audio driver. The target kernel version 6.12.95 does not contain the official fix. However, the MA35D1 product does not include the affected Creative X-Fi hardware or the CONFIG_SND_CTXFI driver. CONFIG_SND only enables the generic ALSA framework and does not imply that the affected driver is present. Therefore, the vulnerable component is not present in the delivered product."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-43115"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "status_notes": "CVE-2026-43115 affects the Tiny SRCU implementation. The target kernel version 6.12.95 does not contain the official fix. However, the MA35D1 product uses an SMP kernel and does not enable CONFIG_TINY_SRCU. Therefore, the vulnerable component is not present in the delivered product."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-43301"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "status_notes": "CVE-2026-43301 affects the Chips&Media Wave5 video codec driver. The target kernel version 6.12.95 does not contain the official fix. The MA35D1 platform uses the VeriSilicon VC8000 video codec and does not include the Chips&Media Wave5 hardware or driver. Therefore, the vulnerable component is not present in the delivered product."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-43326"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "status_notes": "CVE-2026-43326 affects the sched_ext extensible scheduler class. The target kernel version 6.12.95 does not contain the official fix. However, sched_ext support is not enabled in the MA35D1 product kernel because CONFIG_SCHED_CLASS_EXT is disabled. The CONFIG_CAN match is an unrelated keyword-matching false positive. Therefore, the vulnerable component is not present in the delivered product."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-46096"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "fixed",
+      "status_notes": "The target kernel version 6.12.95 includes the official upstream fix introduced in Linux 6.12.95. Therefore, this vulnerability has been resolved in the delivered product."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-46153"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "fixed",
+      "status_notes": "The target kernel version 6.12.95 includes the official upstream fix introduced in Linux 6.12.94. Therefore, this vulnerability has been resolved in the delivered product."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-46314"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "status_notes": "CVE-2026-46314 affects the DRM V3D (Broadcom VideoCore GPU) driver. CONFIG_DRM_V3D is not enabled; the Broadcom VideoCore/V3D GPU is not part of the MA35D1 SoC. The official upstream fix (first released in 5.16) is not present in Linux 6.12.96, but since the vulnerable component is not built into the MA35D1 kernel configuration, the vulnerable code path cannot be reached. Therefore the vulnerable component is not present in the delivered product."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-52994"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "status_notes": "CVE-2026-52994 affects the vsock/virtio. CONFIG_VSOCKETS and CONFIG_VIRTIO are not enabled; MA35D1 is not a virtualization guest. The official upstream fix (first released in 6.7) is not present in Linux 6.12.96, but since the vulnerable component is not built into the MA35D1 kernel configuration, the vulnerable code path cannot be reached. Therefore the vulnerable component is not present in the delivered product."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-53107"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "status_notes": "CVE-2026-53107 affects the Marvell libertas wireless driver. CONFIG_LIBERTAS is not enabled; no wireless chip driver is built at all on MA35D1. The official upstream fix (first released in 6.18.33) is not present in Linux 6.12.96, but since the vulnerable component is not built into the MA35D1 kernel configuration, the vulnerable code path cannot be reached. Therefore the vulnerable component is not present in the delivered product."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-62840"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "status_notes": "Microsoft's October 2026 CVRF links upstream commit 35f0f0a2536a, which fixes the Microsoft Azure Network Adapter (MANA) driver. The resolved MA35D1 configuration disables PCI and does not enable CONFIG_MICROSOFT_MANA. The affected driver is not built; Microsoft's broad version range does not by itself imply product applicability."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-63805"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "status_notes": "CVE-2026-63805 affects the PowerPC NX crypto accelerator. CONFIG_CRYPTO_NX is not enabled, and MA35D1 is an Arm Cortex-A35 SoC; the IBM PowerNV NX accelerator does not exist on this platform. The official upstream fix (first released in 5.5) is not present in Linux 6.12.96, but since the vulnerable component is not built into the MA35D1 kernel configuration, the vulnerable code path cannot be reached. Therefore the vulnerable component is not present in the delivered product."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-64066"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "status_notes": "CVE.org Linux CNA identifies Linux 6.12 and later as affected and lists Linux 6.18.34 as a fixed stable release. The vulnerability affects netfs_read_to_pagecache() in fs/netfs/. The MA35D1 defconfig does not enable NFS_FSCACHE, AFS, Ceph, 9P_FS, NET_9P, SMB/CIFS, or EROFS on-demand, so CONFIG_NETFS_SUPPORT is not selected and the vulnerable netfs code is not compiled into the delivered product."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-64067"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "status_notes": "CVE.org Linux CNA identifies Linux 6.10 and later as affected and lists Linux 7.0.11 as a fixed stable release. The vulnerability affects lockless subrequest-list access in fs/netfs/. The MA35D1 defconfig does not enable any filesystem option that selects CONFIG_NETFS_SUPPORT; NFS is enabled without NFS_FSCACHE. Therefore the vulnerable code is not compiled into the delivered product."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-64160"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "status_notes": "CVE.org Linux CNA identifies Linux 5.18 and later as affected and lists Linux 7.0.11 as a fixed stable release. The vulnerability affects size synchronization in fs/netfs/. No enabled MA35D1 option selects CONFIG_NETFS_SUPPORT; NFS_FSCACHE, AFS, Ceph, 9P_FS, NET_9P, SMB/CIFS, and EROFS on-demand are disabled. Therefore the vulnerable code is not compiled into the delivered product."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-64212"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "status_notes": "CVE.org Linux CNA identifies the Intel iwlwifi MLD link-removal code as affected and lists Linux 6.18.34 as a fixed stable release. The MA35D1 defconfig explicitly disables CONFIG_WLAN_VENDOR_INTEL, has no CONFIG_IWLWIFI, and the hardware uses Realtek RTL8192CU instead. The vulnerable Intel driver is not present in the delivered product."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-64255"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "status_notes": "CVE.org Linux CNA identifies the Intel iwlwifi MLD BA-session handlers as affected and lists Linux 6.18.38 as a fixed stable release. The MA35D1 defconfig explicitly disables CONFIG_WLAN_VENDOR_INTEL and does not enable CONFIG_IWLWIFI; the delivered WiFi uses Realtek RTL8192CU. The vulnerable Intel driver is not present in the delivered product."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-64520"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "status_notes": "The ARM FF-A partition-information handler is built by CONFIG_ARM_FFA_TRANSPORT, which is disabled. ARM64 alone does not enable this firmware transport."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-98087"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "affected",
+      "action_statement": "The vulnerability affects the target product. Remediation should be performed by applying an equivalent backport or upgrading to a kernel release containing the official fix.",
+      "status_notes": "The SMP RT and deadline schedulers in v6.12.118 still select migrate-disabled push candidates. CONFIG_PREEMPT_VOLUNTARY does not remove those SMP scheduler paths. The CNA lists no 6.12 backport; confirm against the exact BSP revision."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-98118"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "status_notes": "CVE.org Linux CNA identifies Linux 6.12 and later as affected and lists Linux 7.2.7 as a fixed stable release. The vulnerability affects readahead synchronization in fs/netfs/. The MA35D1 defconfig does not enable any selector of CONFIG_NETFS_SUPPORT: NFS_FSCACHE, AFS, Ceph, 9P_FS, NET_9P, SMB/CIFS, and EROFS on-demand are disabled. CONFIG_NFS_FS alone does not select netfs, so the vulnerable code is not compiled into the delivered product."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-98119"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "status_notes": "CVE.org Linux CNA identifies Linux 6.10 and later as affected and lists Linux 6.18.53 as the earliest fixed stable release. The vulnerability affects unbuffered writes in fs/netfs/. No enabled MA35D1 option selects CONFIG_NETFS_SUPPORT; NFS is enabled without NFS_FSCACHE and the other netfs client selectors are disabled. Therefore the vulnerable code is not compiled into the delivered product."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-99294"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "status_notes": "The affected nftables forwarding expression is not built because Netfilter and nftables are disabled."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-99349"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "status_notes": "The affected RxRPC transport is disabled; the AFS consumer is also absent."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-99369"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "status_notes": "This is an NFSv4 server delegation issue, not an NFS client issue. CONFIG_NFSD and CONFIG_NFSD_V4 are disabled."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-99380"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "status_notes": "The affected SMB client transaction parsing code is not built; CONFIG_CIFS is disabled."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-99381"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "status_notes": "The affected SMB client directory response code is not built; CONFIG_CIFS is disabled."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-99383"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "status_notes": "The affected SMB client read-credit handling is not built; CONFIG_CIFS is disabled."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-99447"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "status_notes": "The PCI1xxxx SPI controller is not built. The driver requires PCI, which is disabled."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-99472"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "status_notes": "KVM is disabled; its shared PFN cache is not built."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-99493"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "status_notes": "The CNA marks the upstream version affected, but the s390 zcrypt code is not built on MA35D1 ARM64."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-99495"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "status_notes": "The affected zcrypt reply verification belongs to the s390-only driver, which is not built on MA35D1 ARM64."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-99522"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "status_notes": "The Intel irdma RDMA driver is not built because RDMA and the device driver are disabled."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-99571"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "status_notes": "The affected NVMe-over-TCP host transport and the NVMe host core are disabled."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-99586"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "status_notes": "The affected ARM SMMUv3 and SVA implementation is not built. Generic ARM64 or IOMMU support does not enable it."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-99620"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "status_notes": "The AMDGPU command-submission driver is not built. Generic DRM support does not enable AMDGPU."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-99632"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "status_notes": "The AMD KFD queue-management code is not built because the AMD graphics and compute drivers are disabled."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-99637"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "status_notes": "The affected overlayfs directory open path is not built because CONFIG_OVERLAY_FS is disabled."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-99643"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "status_notes": "The affected khugepaged collapse code is not built because CONFIG_TRANSPARENT_HUGEPAGE is disabled."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-99644"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_cannot_be_controlled_by_adversary",
+      "status_notes": "The NUMA memory-tier code is built, but the affected tier teardown runs from the memory hotplug notifier. CONFIG_MEMORY_HOTPLUG is disabled and the notifier registration is a no-op."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-99646"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "affected",
+      "action_statement": "The vulnerability affects the target product. Remediation should be performed by applying an equivalent backport or upgrading to a kernel release containing the official fix.",
+      "status_notes": "The 6.12.118 VMA stack-growth accounting code is built and still lacks the 6.12.119 fix. The stable fix's pre-change context matches v6.12.118."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-99650"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "affected",
+      "action_statement": "The vulnerability affects the target product. Remediation should be performed by applying an equivalent backport or upgrading to a kernel release containing the official fix.",
+      "status_notes": "KSM and swap are both built. The affected swap-in KSM code is present and the 6.12.119 correction is absent in v6.12.118."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-99652"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "status_notes": "The affected userfaultfd move operation is not available with CONFIG_USERFAULTFD disabled."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-99660"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "status_notes": "The affected userfaultfd unregister operation is not built because CONFIG_USERFAULTFD is disabled."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-99664"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "status_notes": "The CNA identifies the device-DAX PUD path. CONFIG_DEV_DAX is disabled; generic CONFIG_DAX does not provide that device path."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-99665"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "status_notes": "The affected khugepaged operation is not built because transparent huge pages are disabled."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-99669"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "status_notes": "Although v6.12.118 is in the CNA affected version range, the impacted transparent-huge-page code is not built."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-99674"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "affected",
+      "action_statement": "The vulnerability affects the target product. Remediation should be performed by applying an equivalent backport or upgrading to a kernel release containing the official fix.",
+      "status_notes": "The platform M_CAN CAN-FD driver and packet networking are built. M_CAN calls the generic CAN skb validator affected by this issue; the v6.12.119 validation fix is absent in v6.12.118. Lack of CAN XL hardware does not remove this issue."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-99675"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "status_notes": "The NVMe target keep-alive handler is not built because CONFIG_NVME_TARGET is disabled."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-99679"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "status_notes": "The affected XFS pNFS layout code is not built because XFS is disabled."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-99682"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "status_notes": "The version range is affected, but the individual VirtIO block driver is disabled. Generic VirtIO does not build virtio_blk."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-99687"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "status_notes": "The affected vhost SCSI backend is not built."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-99698"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "status_notes": "Contiguous Memory Allocator support is not built under the supplied resolved defconfig."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-99701"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "status_notes": "KSM is enabled, but the issue requires userfaultfd write protection. CONFIG_USERFAULTFD is disabled and that facility is unavailable."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-99703"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "status_notes": "The HugeTLB PMD-sharing code for this case is not built. Both HugeTLB and hugetlbfs are disabled."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-99706"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_cannot_be_controlled_by_adversary",
+      "status_notes": "The affected NUMA large-mapping rebuild path is disabled. Swap itself is enabled, but v6.12.118 does not provide the affected higher-order anonymous swap path without transparent huge pages and THP swap support."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-99709"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "affected",
+      "action_statement": "The vulnerability affects the target product. Remediation should be performed by applying an equivalent backport or upgrading to a kernel release containing the official fix.",
+      "status_notes": "The built-in Internet protocol stack includes the shared IP fragment reassembly code. The v6.12.119 fix for reassembly queue accounting is absent in v6.12.118."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-99716"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "status_notes": "Intel coretemp is not built on the assessed ARM64 platform."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-99720"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "status_notes": "The ChipCap2 sensor driver and its affected interrupt teardown are not built."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-99729"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "status_notes": "The issue requires device-exclusive page entries; CONFIG_DEVICE_PRIVATE and CONFIG_ZONE_DEVICE are disabled."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-99732"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_cannot_be_controlled_by_adversary",
+      "status_notes": "The 6.12.118 code predates the fix, but CONFIG_MEMORY_FAILURE=n removes the unpinned hardware-poison removal path. The reviewed enabled truncation, invalidation and readahead paths retain the file, inode or backing device through removal, or run synchronously during inode eviction. Reclaim saves the free_folio callback before removal under the inode lock. No unpinned removal path was found for the enabled NFS or secretmem callbacks."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-99734"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_cannot_be_controlled_by_adversary",
+      "status_notes": "The old shmem_file() check remains present, and shmem and memfd are enabled. The issue requires a non-shmem inode whose file mapping uses shmem address-space operations. The in-tree mapping audit found that Coda can create that combination, but CONFIG_CODA_FS=n. Normal VFS opens and clones preserve inode and mapping pairing, and the other built-in mapping aliases do not supply shmem address-space operations."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-99736"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "affected",
+      "action_statement": "The vulnerability affects the target product. Remediation should be performed by applying an equivalent backport or upgrading to a kernel release containing the official fix.",
+      "status_notes": "Shmem and swap support are both built. The v6.12.119 fix for the shmem swap-in error accounting is absent in v6.12.118."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-99748"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "status_notes": "The affected durable reconnect and replay code belongs to the in-kernel SMB server, which is disabled."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-99749"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "status_notes": "The affected SMB server stream creation is not built because CONFIG_SMB_SERVER is disabled."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-99756"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "status_notes": "The affected Btrfs subvolume handling is not built."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-99765"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "status_notes": "The affected SCSI target ACL path requires CONFIG_TARGET_CORE. The SCSI initiator stack does not enable this target component."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-99792"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "status_notes": "The affected SMB server tree-disconnect path is not built because the in-kernel server is disabled."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-99809"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "status_notes": "The VFIO platform driver is not built."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-99810"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "status_notes": "The VFIO Freescale management-complex driver is not built."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-99811"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/linux-ma35d1-public-cip36-defconfig-assessment@6.12.118"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "status_notes": "The VFIO CDX driver is not built."
+    }
+  ]
+}
